@@ -1,0 +1,36 @@
+{
+  "FP32": {
+    "sync/latency-hint/1-stream": {
+      "latency_ms": 46.45,
+      "fps": 21.53
+    },
+    "async/latency-hint/1-stream": {
+      "latency_ms": 96.13,
+      "fps": 20.15,
+      "wall_ms": 9923.8
+    },
+    "async/throughput-hint/4-streams": {
+      "latency_ms": 191.32,
+      "fps": 22.97,
+      "wall_ms": 8707.5
+    },
+    "_num_streams": 4
+  },
+  "INT8": {
+    "sync/latency-hint/1-stream": {
+      "latency_ms": 27.33,
+      "fps": 36.59
+    },
+    "async/latency-hint/1-stream": {
+      "latency_ms": 55.45,
+      "fps": 34.52,
+      "wall_ms": 5793.9
+    },
+    "async/throughput-hint/4-streams": {
+      "latency_ms": 103.69,
+      "fps": 40.85,
+      "wall_ms": 4895.7
+    },
+    "_num_streams": 4
+  }
+}

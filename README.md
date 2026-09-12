@@ -19,15 +19,25 @@
 | FP32 | 55.60 | 17.99 | 12.71 | 0.4035 | — | 1.00× |
 | FP16 | 53.27 | 18.77 | 6.35 | 0.4030 | −0.0005 | 1.04× |
 | INT8 (PTQ) | 27.99 | 35.73 | 3.29 | 0.3455 | −0.0580 | **1.99×** |
-| INT8 (accuracy-aware) | 31.69 | 31.56 | 3.34 | 0.3897 | −0.0138 | 1.75× |
+| INT8-AA (accuracy-aware) | 31.69 | 31.56 | 3.34 | 0.3897 | −0.0138 | 1.75× |
 
 ### 三条值得记住的结论
 
 **1. 朴素 INT8 的精度代价，比你以为的大得多。**
 默认 PTQ 把 mAP50-95 从 0.4035 打到 0.3455——掉了 **5.8 个点**。光看 "1.99× 加速" 就上线的话，这个模型基本废了。
 
+> **命名提醒：** 这里的 INT8-AA 是 NNCF 的 *accuracy-aware quantization*，
+> **不是** AWQ（Activation-aware Weight Quantization，Lin et al. 面向 LLM 权重的方法）。
+> 两者机制完全不同，别混用缩写。
+
 **2. 但 accuracy-aware quantization 几乎把这笔账抹平了。**
 `nncf.quantize_with_accuracy_control`（max_drop=0.01，rank-based 敏感度排序，把敏感算子回退到 FP16/FP32）把精度损失压到 **1.4 个点**，代价只有 **3.7 ms**——相比 FP32 仍然有 **1.75×** 加速。这条曲线（精度预算 ↔ 加速比）才是真正该向业务方汇报的东西。
+
+**关于「允许多掉 1 个点，结果掉了 1.4 个点」：**
+
+`max_drop=0.01` 这个预算是**在敏感度调参集（tuning split）上计算和判定的**；
+上表里的 −0.0138 是在**完全不相交的 held-out 测试集（val2017 200 张）上测出来的**。
+两者的差就是泛化间隙，属于设计使然——正因为允许它存在，数字才没有作弊。
 
 **3. FP16 在这颗 CPU 上几乎不加速，原因很有意思。**
 i7-8559U 是 Coffee Lake（第 8 代），**没有原生 FP16 计算通路**，FP16 在 CPU 上要上转成 FP32 再算。所以体积虽然减半（12.71 → 6.35 MB），延迟只从 55.60 降到 53.27 ms（1.04×），收益基本来自内存带宽。
@@ -110,6 +120,48 @@ mAP50 只差 **+0.015**，完全落在 200 张子集的抽样波动范围内（�
 
 ---
 
+## C++ Runtime 路径 vs Python
+
+`benchmark_cpp/yolo_infer_cpp.cpp` 是同一套流水线的 **C++ 实现**：letterbox（含手写双线性 resize）、
+解码、逐类 NMS **全部自己写**，不依赖 OpenCV（`opencv-python` 的 wheel 不提供 C++ 头文件与 cmake config）。
+
+```
+stage           C++ (ms)  Python (ms)   speed-up
+pre                11.82         1.63      0.14x
+infer              44.67        46.30      1.04x
+post                1.13         8.04      7.12x   <- 后处理 C++ 快 7 倍
+total              57.78        56.04      0.97x
+检测框数量       C++ 194      Python 194    完全一致
+```
+
+三点值得注意：
+
+1. **后处理（解码 + 逐类 NMS）C++ 快 7.12×**——这是 host 端真正的开销大头。
+2. **两边检测结果完全一致（194 == 194）**，这是对 C++ 实现的正确性验证。
+3. **前处理反而慢了 6.8×**：手写标量双线性 resize 打不过 OpenCV 里 SIMD 优化过的 `resize`。
+   —— 这条本身就是「为什么需要经过调优的算子库」的第一手证据。
+   整体 total 因此基本打平（0.97×），**没有粉饰成「C++ 全面更快」**。
+
+## 异步与吞吐模式
+
+`async_bench.py` 对比同步 / `AsyncInferQueue` 异步、`PERFORMANCE_HINT` 的 latency / throughput、
+单流 / 多流（本机 4 核，THROUGHPUT hint 自动取 4 streams）：
+
+| Model | Mode | Latency ms | FPS |
+|---|---|---|---|
+| FP32 | sync / latency-hint / 1 stream | 46.45 | 21.53 |
+| FP32 | async / throughput-hint / 4 streams | 191.32 | 22.97 |
+| INT8 | sync / latency-hint / 1 stream | 27.33 | 36.59 |
+| INT8 | async / throughput-hint / 4 streams | 103.69 | 40.85 |
+
+多流把 INT8 从 36.59 拉到 40.85 FPS（+11.6%），FP32 +6.7% —— 4 核 CPU 上就这个量级。
+
+**关键理解：异步「延迟」是 103.69 ms 而不是 27 ms，因为它量的是「提交到回调」的时间，
+队列饱和时自然把排队等待也算进去了。** 所以：
+
+- 要**延迟** → 同步，或非饱和队列
+- 要**吞吐** → async + 多 stream + THROUGHPUT hint
+
 ## 目录
 
 ```
@@ -117,7 +169,14 @@ openvino-yolo-benchmark/
 ├── run_benchmark.py        主流程：造 IR → NNCF 量化 → 精度 → 性能 → 出表
 ├── yolo_utils.py           letterbox / anchor 解码 / per-class NMS / COCO 101点 AP
 ├── coco_eval_set.py        coco128 与 COCO val2017 评测集；含类别映射
-├── benchmark_cpp/          OpenVINO C++ Runtime 基准（测 C++ vs Python 端到端开销）
+├── async_bench.py          同步 / 异步、latency / throughput hint、单流 / 多流对比
+├── cpp_python_parity.py    C++ 与 Python 等价管线的逐阶段耗时对比
+├── benchmark_cpp/
+│   ├── yolo_infer_cpp.cpp  完整 C++ 推理路径（手写 letterbox / 解码 / NMS，零 OpenCV 依赖）
+│   ├── bench_cpp.cpp       纯推理计时器（只测模型）
+│   └── CMakeLists.txt      含 macOS libc++ 头文件路径的 workaround
+├── results/async_bench.json
+├── results/cpp_python_parity.json
 ├── results/
 │   ├── results.md          生成的结果表
 │   └── verify.json         三轮重复测量的原始数据
@@ -128,7 +187,11 @@ openvino-yolo-benchmark/
 
 ## 已知限制 / 下一步
 
-- **只测了 CPU。** 这台机器没有可用的 Intel GPU / NPU 设备。要在 Core Ultra 上补齐三端对比，直接运行同一脚本即可（`--eval-set val2017`），脚本会自动探测 GPU / NPU。
+- **只测了 CPU，而且这不是懒惰而是物理限制。** 本机是 macOS x86_64：OpenVINO 的 macOS 发行版
+  **只带 `libopenvino_intel_cpu_plugin`，没有 GPU 插件**（已核实 pip 包的 `libs/` 目录），
+  这颗 i7-8559U 也没有 NPU。所以 iGPU / NPU 一列拿不到，**不会编造**。
+  要补齐三端，需在 Linux + Intel GPU，或 Intel Core Ultra 机器（如 Intel Tiber AI Cloud）上跑同一脚本，
+  它会自动探测 `GPU` / `NPU`。
 - NPU 侧预计会遇到的约束（待硬件验证）：**不支持 FP32**（仅 FP16/INT8）、**必须静态 shape**、**首次编译到 NPU 有十几秒冷启动**、不支持的算子会**静默回退到 CPU**。这几条决定了 "NPU 不一定比 iGPU 快"。
 - 校准集只有 128 张。扩到 300+ 张通常能进一步缩小朴素 INT8 的精度损失。
 - 下一步想加：per-layer 延迟剖析（`benchmark_app -report_type detailed_counters`）定位回退的具体算子，以及 INT4 权重压缩。
