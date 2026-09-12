@@ -1,0 +1,10 @@
+# 实测环境：macOS x86_64 / Python 3.13
+# 版本组合很关键 —— nncf 3.3.0 需要 ov.Type.u2，而当前 OpenVINO 最新版
+# (2025.4.1) 并未暴露该枚举，import 阶段就会 AttributeError。必须往下配一个。
+openvino==2025.4.1
+nncf==3.2.0
+numpy==2.3.5
+opencv-python-headless==5.0.0.93
+pillow==12.3.0
+pyyaml==6.0.3
+tqdm==4.70.1

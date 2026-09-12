@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.DS_Store
+
+# 下载的模型 / 数据 / 标注（体积大，脚本会自动重新下载）
+assets/
+models/
+data/
+
+# 编译产物
+benchmark_cpp/build/

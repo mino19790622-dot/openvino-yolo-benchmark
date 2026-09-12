@@ -1,0 +1,65 @@
+{
+  "env": {
+    "openvino": "2025.4.1-20426-82bbf0292c5-releases/2025/4",
+    "python": "3.13.12",
+    "platform": "Darwin 24.6.0 (x86_64)",
+    "cpu": "Intel(R) Core(TM) i7-8559U CPU @ 2.70GHz",
+    "devices_seen": [
+      "CPU"
+    ],
+    "devices_used": [
+      "CPU"
+    ]
+  },
+  "accuracy": {
+    "FP32": 0.4035,
+    "FP32_50": 0.5543,
+    "FP16": 0.403,
+    "FP16_50": 0.5541,
+    "INT8": 0.3455,
+    "INT8_50": 0.5296,
+    "INT8-AWQ": 0.3897,
+    "INT8-AWQ_50": 0.544,
+    "delta_FP16": -0.0005,
+    "delta_INT8": -0.058,
+    "delta_INT8-AWQ": -0.0138
+  },
+  "runs": [
+    {
+      "device": "CPU",
+      "latency_ms": 60.74,
+      "latency_mean_ms": 64.21,
+      "latency_p95_ms": 78.6,
+      "fps": 16.46,
+      "precision": "FP32",
+      "model_mb": 12.71
+    },
+    {
+      "device": "CPU",
+      "latency_ms": 57.07,
+      "latency_mean_ms": 58.27,
+      "latency_p95_ms": 64.09,
+      "fps": 17.52,
+      "precision": "FP16",
+      "model_mb": 6.35
+    },
+    {
+      "device": "CPU",
+      "latency_ms": 33.11,
+      "latency_mean_ms": 34.58,
+      "latency_p95_ms": 39.14,
+      "fps": 30.2,
+      "precision": "INT8",
+      "model_mb": 3.29
+    },
+    {
+      "device": "CPU",
+      "latency_ms": 34.71,
+      "latency_mean_ms": 35.48,
+      "latency_p95_ms": 41.74,
+      "fps": 28.81,
+      "precision": "INT8-AWQ",
+      "model_mb": 3.34
+    }
+  ]
+}
