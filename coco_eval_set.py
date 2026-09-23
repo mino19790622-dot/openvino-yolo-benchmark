@@ -93,6 +93,12 @@ class Val2017Set:
         return p
 
     def images(self):
+        """按需下载并逐张产出 ``(image, {"gt_boxes", "gt_classes"})``。
+
+        图片是惰性下载的（首次访问才落盘），读不出来的会被静默跳过 —— 所以
+        实际产出的张数可能少于 ``n()``，而 ``n_gt()`` 统计的仍是全部 id 的框。
+        算 mAP 时请以真正产出并喂进模型的数量为准。
+        """
         for idx in self.ids:
             p = self._fetch(idx)
             im = cv2.imread(str(p))
