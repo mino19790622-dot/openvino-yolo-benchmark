@@ -34,12 +34,19 @@ class Coco128Set:
         return "coco128 (subset of COCO train2017)"
 
     def n(self) -> int:
+        """样本张数（已成功读入内存的图片数）。"""
         return len(self.samples)
 
     def n_gt(self) -> int:
+        """全部样本的标注框总数，用于校核 mAP 的分母。"""
         return int(sum(len(s["gt_boxes"]) for s in self.samples))
 
     def images(self):
+        """逐张产出 ``(image, {"gt_boxes", "gt_classes"})``。
+
+        与 :class:`Val2017Set` 不同，这里的图片在 ``__init__`` 时就已经全部读入，
+        所以产出的张数恒等于 ``n()``，不会出现静默跳过导致的数目不符。
+        """
         for s in self.samples:
             yield s["image"], {"gt_boxes": s["gt_boxes"], "gt_classes": s["gt_classes"]}
 
@@ -81,12 +88,15 @@ class Val2017Set:
         return f"COCO val2017 subset ({len(self.ids)} images)"
 
     def n(self) -> int:
+        """计划评测的图片数（上限 ``limit``），不等于实际产出的张数。"""
         return len(self.ids)
 
     def n_gt(self) -> int:
+        """全部计划图片的标注框总数，用于校核 mAP 的分母。"""
         return int(sum(len(self.boxes_by_img[i]) for i in self.ids))
 
     def _fetch(self, img_id: int) -> Path:
+        """返回图片本地路径，缺失时按需下载并落盘。"""
         p = VAL_IMG_DIR / f"{img_id:012d}.jpg"
         if not p.exists():
             urllib.request.urlretrieve(VAL_URL.format(img_id), p)

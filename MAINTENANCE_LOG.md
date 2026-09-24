@@ -17,3 +17,8 @@
 - **Change**: coco_eval_set.py: add a docstring to Val2017Set.images() recording that images are downloaded lazily and unreadable ones are skipped silently, so the number yielded can be lower than n() while n_gt() still counts every id
 - **Verification**: pytest: 16 passed; ruff: all checks passed
 
+## 2026-09-24 — document the n()/n_gt()/images() counting contract on both eval sets
+
+- **Change**: coco_eval_set.py: add docstrings to Coco128Set.n()/n_gt()/images() and Val2017Set.n()/n_gt()/_fetch(). Records that n() is the planned image count while images() may yield fewer for Val2017Set (lazy download, unreadable files skipped) but always equals n() for Coco128Set, which reads every image up front.
+- **Verification**: pytest: 16 passed; ruff: all checks passed
+
