@@ -12,6 +12,7 @@ import pytest
 from yolo_utils import (
     _iou_matrix,
     _needs_sigmoid,
+    compute_coco_map,
     decode,
     letterbox,
     multiclass_nms,
@@ -186,3 +187,73 @@ def test_decode_clips_to_the_original_image_bounds():
         orig_wh=(640, 640),
     )
     assert boxes[0].tolist() == pytest.approx([580, 580, 640, 640])
+
+
+# ------------------------------------------------------------------------- mAP
+def _one_image(gt_boxes, gt_classes, boxes, scores, labels):
+    """One prediction record, shaped the way ``compute_coco_map`` expects it."""
+    return {
+        "gt_boxes": np.asarray(gt_boxes, dtype=np.float32).reshape(-1, 4),
+        "gt_classes": np.asarray(gt_classes, dtype=int),
+        "boxes": np.asarray(boxes, dtype=np.float32).reshape(-1, 4),
+        "scores": np.asarray(scores, dtype=np.float32),
+        "labels": np.asarray(labels, dtype=int),
+    }
+
+
+def test_map_is_one_for_a_perfect_detection():
+    img = _one_image([[0, 0, 10, 10]], [5], [[0, 0, 10, 10]], [0.9], [5])
+    res = compute_coco_map([img])
+    assert res["mAP50"] == pytest.approx(1.0)
+    assert res["mAP50-95"] == pytest.approx(1.0)
+    # only the class that actually carries ground truth gets scored
+    assert res["classes_evaluated"] == 1
+
+
+def test_map_is_zero_when_the_only_detection_misses_every_gt():
+    img = _one_image([[0, 0, 10, 10]], [5], [[500, 500, 510, 510]], [0.9], [5])
+    res = compute_coco_map([img])
+    assert res["mAP50"] == pytest.approx(0.0)
+    assert res["mAP50-95"] == pytest.approx(0.0)
+
+
+def test_map_averages_over_the_ten_coco_iou_thresholds():
+    # IoU(box, gt) = 80/100 = 0.8, so it counts at 0.50..0.80 but not 0.85..0.95:
+    # 7 of the 10 thresholds -> mAP50 stays 1.0 while mAP50-95 drops to 7/10
+    img = _one_image([[0, 0, 10, 10]], [5], [[0, 0, 8, 10]], [0.9], [5])
+    res = compute_coco_map([img])
+    assert res["mAP50"] == pytest.approx(1.0)
+    assert res["mAP50-95"] == pytest.approx(0.7)
+
+
+def test_map_uses_101_point_interpolation_for_partial_recall():
+    # 2 GT boxes but 1 detection -> recall caps at 0.5, so only the 51 thresholds
+    # t in {0.00, 0.01, ..., 0.50} retain precision 1.0 -> AP = 51/101
+    img = _one_image(
+        [[0, 0, 10, 10], [100, 100, 110, 110]], [5, 5], [[0, 0, 10, 10]], [0.9], [5]
+    )
+    res = compute_coco_map([img])
+    assert res["mAP50"] == pytest.approx(51 / 101)
+
+
+def test_map_scores_each_class_that_has_ground_truth():
+    img = _one_image(
+        [[0, 0, 10, 10], [100, 100, 110, 110]],
+        [5, 7],
+        [[0, 0, 10, 10], [100, 100, 110, 110]],
+        [0.9, 0.8],
+        [5, 7],
+    )
+    res = compute_coco_map([img])
+    assert res["mAP50"] == pytest.approx(1.0)
+    assert res["classes_evaluated"] == 2
+
+
+def test_map_without_any_detection_reports_no_evaluated_class():
+    img = _one_image([[0, 0, 10, 10]], [5], [], [], [])
+    res = compute_coco_map([img])
+    assert res["classes_evaluated"] == 0
+    assert np.isnan(res["mAP50"])
+    # the class is still recorded, but with no AP attached
+    assert res["per_class"][5]["npos"] == 1
+    assert res["per_class"][5]["map"] is None
