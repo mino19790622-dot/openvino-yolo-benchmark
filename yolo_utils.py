@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -16,15 +15,19 @@ import numpy as np
 IMG_SIZE = 640
 NUM_CLASSES = 80
 
+# COCO 的 10 个 IoU 阈值（0.50 : 0.05 : 0.95）。
+# 放模块级常量而不是默认参数，是为了避免在签名里调用 np.linspace()。
+IOU_THRS = np.linspace(0.5, 0.95, 10)
+
 
 # --------------------------------------------------------------------------
 # 前处理：letterbox + HWC(BGR) -> NCHW(RGB) + /255
 # --------------------------------------------------------------------------
-def letterbox(im: np.ndarray, size: int = IMG_SIZE):
+def letterbox(im: np.ndarray, size: int = IMG_SIZE) -> tuple[np.ndarray, float, tuple[int, int]]:
     """保持长宽比缩放并居中填充，返回画布、缩放比、填充量。"""
     h, w = im.shape[:2]
     r = min(size / h, size / w)
-    nh, nw = int(round(h * r)), int(round(w * r))
+    nh, nw = round(h * r), round(w * r)   # round() 在 Python 3 已返回 int
     im = cv2.resize(im, (nw, nh), interpolation=cv2.INTER_LINEAR)
     canvas = np.full((size, size, 3), 114, dtype=np.uint8)
     top, left = (size - nh) // 2, (size - nw) // 2
@@ -32,7 +35,8 @@ def letterbox(im: np.ndarray, size: int = IMG_SIZE):
     return canvas, r, (left, top)
 
 
-def preprocess(im: np.ndarray, size: int = IMG_SIZE):
+def preprocess(im: np.ndarray, size: int = IMG_SIZE) -> tuple[np.ndarray, float, tuple[int, int]]:
+    """letterbox 之后做 BGR->RGB、HWC->CHW 与 /255，返回 NCHW 批次、缩放比、填充量。"""
     canvas, r, pad = letterbox(im, size)
     x = canvas[:, :, ::-1].transpose(2, 0, 1)  # BGR -> RGB, HWC -> CHW
     x = np.ascontiguousarray(x, dtype=np.float32) / 255.0
@@ -67,7 +71,8 @@ def nms(boxes: np.ndarray, scores: np.ndarray, iou_thr: float) -> np.ndarray:
     return np.asarray(keep, dtype=int)
 
 
-def multiclass_nms(boxes, scores, labels, conf_thr=0.001, iou_thr=0.7, max_det=300):
+def multiclass_nms(boxes, scores, labels, conf_thr=0.001, iou_thr=0.7,
+                   max_det=300) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """按类别分别做 NMS（与 ultralytics 默认行为一致）。"""
     out_b, out_s, out_l = [], [], []
     for c in np.unique(labels):
@@ -100,8 +105,12 @@ def _needs_sigmoid(cls_scores: np.ndarray) -> bool:
 
 
 def decode(pred: np.ndarray, ratio: float, pad, orig_wh,
-           conf_thr=0.001, iou_thr=0.7, max_det=300):
-    """pred 形状支持 (1,84,8400) 或 (1,8400,84)。"""
+           conf_thr=0.001, iou_thr=0.7,
+           max_det=300) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """pred 形状支持 (1,84,8400) 或 (1,8400,84)。
+
+    返回已还原到原图坐标的 (boxes, scores, labels)，其中 boxes 为 xyxy。
+    """
     if pred.ndim == 3:
         pred = np.squeeze(pred, 0)
     if pred.shape[0] < pred.shape[1]:      # (84, 8400)
@@ -144,7 +153,12 @@ def decode(pred: np.ndarray, ratio: float, pad, orig_wh,
 # --------------------------------------------------------------------------
 # 数据集：Ultralytics coco128（YOLO 格式标注）
 # --------------------------------------------------------------------------
-def load_coco128(root: str = "data/coco128"):
+def load_coco128(root: str = "data/coco128") -> list[dict]:
+    """读取 coco128 的 images/labels 目录，返回样本列表。
+
+    每个样本是 dict(id, path, image, gt_boxes, gt_classes)，gt_boxes 为原图坐标下的
+    xyxy，缺失或格式不符的标注行会被跳过；读不出来的图片同样跳过。
+    """
     root = Path(root)
     img_dir = root / "images" / "train2017"
     lbl_dir = root / "labels" / "train2017"
@@ -199,13 +213,12 @@ def _iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return inter / np.maximum(union, 1e-9)
 
 
-def compute_coco_map(predictions, iou_thrs=np.linspace(0.5, 0.95, 10)):
+def compute_coco_map(predictions, iou_thrs=IOU_THRS) -> dict:
     """累进式 COCO 风格 mAP。
 
     predictions: list[dict(gt_boxes, gt_classes, boxes, scores, labels)]
     返回 dict(mAP50_95, mAP50, per_class_ap)
     """
-    iou_thrs = iou_thrs
     aps_5095, aps50, detail = [], [], {}
 
     for cls in range(NUM_CLASSES):
