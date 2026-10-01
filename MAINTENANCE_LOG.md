@@ -32,3 +32,8 @@
 - **Change**: yolo_utils.py: (1) 给 letterbox/preprocess/multiclass_nms/decode/load_coco128/compute_coco_map 补返回类型标注；为 preprocess、load_coco128（此前无 docstring）、decode 补/扩 docstring。 (2) 清掉该文件里 5 处【既有】ruff 告警 —— verify 只 lint 本次改动的文件，不清干净就无法通过：F401 删掉未使用的 import os（全仓 grep 无 yolo_utils.os / U.os 引用）；RUF046 x2 去掉 int(round(x)) 多余的 int()（Python 3 的 round() 已返回 int）；B008 把默认参数里的 np.linspace(0.5,0.95,10) 提为模块级常量 IOU_THRS；PLW0127 删掉空操作行 iou_thrs = iou_thrs。 全部为行为等价改动：未改业务逻辑、未增删依赖、未动 .github/workflows。
 - **Verification**: pytest: 22 passed; ruff check yolo_utils.py: All checks passed; 另做 20 万组随机尺寸的 round() vs int(round()) 等价性复算，差异 0
 
+## 2026-10-01 — docs(utils): document the two private helpers
+
+- **Change**: 给 yolo_utils.py 的 _needs_sigmoid 与 _iou_matrix 补 docstring：说明前者用抽样 min/max 区分 logits 与概率，后者返回 (len(a), len(b)) 的成对 IoU 矩阵并对空输入与退化框兜底。纯文档，无行为变化。
+- **Verification**: pytest 22 passed; ruff All checks passed
+

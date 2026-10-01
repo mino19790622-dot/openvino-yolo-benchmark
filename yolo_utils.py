@@ -100,6 +100,12 @@ _sigmoid_applied: dict[str, bool] = {}
 
 
 def _needs_sigmoid(cls_scores: np.ndarray) -> bool:
+    """判断类别分数是 logits 还是已经过 sigmoid 的概率。
+
+    OpenVINO 导出的图有时把 sigmoid 融进了模型，此时输出已经在 (0, 1) 内。
+    只在 [0, 1] 区间内就当作概率直接使用；出现越界值则说明还是 logits。
+    最多抽样 10000 个元素，避免在大张量上做全量 min/max。
+    """
     sample = cls_scores.ravel()[:: max(1, cls_scores.size // 10000)]
     return bool(sample.min() < 0.0 or sample.max() > 1.0)
 
@@ -200,6 +206,11 @@ def load_coco128(root: str = "data/coco128") -> list[dict]:
 # mAP
 # --------------------------------------------------------------------------
 def _iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """计算两组 xyxy 框的两两 IoU，返回形状为 (len(a), len(b)) 的矩阵。
+
+    任一侧为空时返回对应形状的全零矩阵，调用方无需先做空判断。
+    并集用 1e-9 兜底，避免完全退化（零面积）的框产生除零。
+    """
     if a.size == 0 or b.size == 0:
         return np.zeros((len(a), len(b)), dtype=np.float32)
     ix1 = np.maximum(a[:, None, 0], b[None, :, 0])
