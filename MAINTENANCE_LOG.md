@@ -37,3 +37,8 @@
 - **Change**: 给 yolo_utils.py 的 _needs_sigmoid 与 _iou_matrix 补 docstring：说明前者用抽样 min/max 区分 logits 与概率，后者返回 (len(a), len(b)) 的成对 IoU 矩阵并对空输入与退化框兜底。纯文档，无行为变化。
 - **Verification**: pytest 22 passed; ruff All checks passed
 
+## 2026-10-02 — docs(eval): document the two eval-set constructors and name()
+
+- **Change**: coco_eval_set.py: add docstrings to Coco128Set.__init__ (reads all of data/coco128 into memory up front) and Coco128Set.name()/Val2017Set.name() (human-readable label that is printed and written into the report header), plus Val2017Set.__init__ (keeps only images with >=1 non-crowd box, sorted by id, capped at limit; categories remapped ascending from category_id to 0..79). Pure documentation, no behaviour change.
+- **Verification**: pytest: 22 passed; ruff check coco_eval_set.py: All checks passed
+

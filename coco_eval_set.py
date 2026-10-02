@@ -28,9 +28,11 @@ class Coco128Set:
     绝对 mAP 会偏乐观，不适合单独引用；用同一套数据比较 FP32 vs INT8 的差值仍然有效。"""
 
     def __init__(self):
+        """一次性把 ``data/coco128`` 全部读进内存，不做任何惰性加载。"""
         self.samples = U.load_coco128(str(DATA / "coco128"))
 
     def name(self) -> str:
+        """人类可读的评测集名称，打印到控制台并写入报告表头。"""
         return "coco128 (subset of COCO train2017)"
 
     def n(self) -> int:
@@ -55,6 +57,11 @@ class Val2017Set:
     """COCO 官方 val2017 子集 —— 模型没见过的数据，绝对 mAP 可引用。"""
 
     def __init__(self, limit: int = 300):
+        """解析 COCO 标注并选出待评测的图片 id。
+
+        只保留至少有一个非 crowd 标注框的图片（与 COCO 官方评测一致），
+        按 id 升序取前 ``limit`` 张；类别按 category_id 升序重映射为 0..79。
+        """
         if not VAL_ANN.exists():
             raise FileNotFoundError(
                 f"缺少 {VAL_ANN}\n"
@@ -85,6 +92,7 @@ class Val2017Set:
         VAL_IMG_DIR.mkdir(parents=True, exist_ok=True)
 
     def name(self) -> str:
+        """人类可读的评测集名称，随 ``n()`` 一起写入报告表头。"""
         return f"COCO val2017 subset ({len(self.ids)} images)"
 
     def n(self) -> int:
