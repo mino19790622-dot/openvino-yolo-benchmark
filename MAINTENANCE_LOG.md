@@ -42,3 +42,8 @@
 - **Change**: coco_eval_set.py: add docstrings to Coco128Set.__init__ (reads all of data/coco128 into memory up front) and Coco128Set.name()/Val2017Set.name() (human-readable label that is printed and written into the report header), plus Val2017Set.__init__ (keeps only images with >=1 non-crowd box, sorted by id, capped at limit; categories remapped ascending from category_id to 0..79). Pure documentation, no behaviour change.
 - **Verification**: pytest: 22 passed; ruff check coco_eval_set.py: All checks passed
 
+## 2026-10-05 — test(iou): cover empty and zero-area boxes in _iou_matrix
+
+- **Change**: tests/test_yolo_utils.py: 给 _iou_matrix 补 2 个测试 —— ① 任一侧为空时返回形状正确的全零矩阵 ((1,0)/(0,1)/(0,0))，验证调用方无需先做空判断；② 零面积退化框使并集为 0，靠 1e-9 兜底返回 0.0 而非 nan/inf（np.isfinite 断言），保证 mAP 不会被污染。纯测试新增，无生产代码改动。
+- **Verification**: pytest 24 passed (24 collected in tests/test_yolo_utils.py, 由 22 -> 24); ruff check tests/test_yolo_utils.py: All checks passed
+

@@ -102,6 +102,25 @@ def test_iou_matrix_identity_and_disjoint():
     assert float(m[0, 1]) == pytest.approx(0.0)
 
 
+def test_iou_matrix_empty_side_returns_correctly_shaped_zeros():
+    # callers rely on not having to guard against empty GT / detection lists
+    box = np.array([[0, 0, 10, 10]], dtype=np.float32)
+    no_boxes = np.empty((0, 4), dtype=np.float32)
+    assert _iou_matrix(box, no_boxes).shape == (1, 0)
+    assert _iou_matrix(no_boxes, box).shape == (0, 1)
+    assert _iou_matrix(no_boxes, no_boxes).shape == (0, 0)
+
+
+def test_iou_matrix_zero_area_box_does_not_divide_by_zero():
+    # a degenerate box makes the union 0, so the 1e-9 guard must return 0.0
+    # rather than nan/inf -- mAP must stay finite when such a box slips through
+    degenerate = np.array([[5, 5, 5, 5]], dtype=np.float32)
+    m = _iou_matrix(degenerate, degenerate)
+    assert m.shape == (1, 1)
+    assert float(m[0, 0]) == pytest.approx(0.0)
+    assert np.isfinite(m).all()
+
+
 def test_needs_sigmoid_distinguishes_logits_from_probabilities():
     assert _needs_sigmoid(np.array([[0.1, 0.9]])) is False
     assert _needs_sigmoid(np.array([[0.1, 2.5]])) is True
