@@ -74,6 +74,13 @@ def test_nms_on_empty_input_returns_empty():
     assert keep.size == 0
 
 
+def test_nms_single_box_is_returned_unchanged():
+    # a lone box cannot overlap anything, so it must survive every threshold
+    boxes = np.array([[0, 0, 10, 10]], dtype=np.float32)
+    assert nms(boxes, np.array([0.9], dtype=np.float32), iou_thr=0.5).tolist() == [0]
+    assert nms(boxes, np.array([0.9], dtype=np.float32), iou_thr=0.0).tolist() == [0]
+
+
 def test_multiclass_nms_does_not_suppress_across_classes():
     boxes = np.array([[0, 0, 10, 10], [0, 0, 10, 10]], dtype=np.float32)
     scores = np.array([0.9, 0.8], dtype=np.float32)
@@ -90,6 +97,16 @@ def test_multiclass_nms_respects_max_det_and_keeps_top_scores():
     out_b, out_s, _ = multiclass_nms(boxes, scores, labels, iou_thr=0.5, max_det=3)
     assert len(out_b) == 3
     assert out_s[0] >= out_s[1] >= out_s[2]
+
+
+def test_multiclass_nms_on_empty_input_returns_empty_arrays():
+    # an image with no surviving detection must yield empty, correctly typed arrays
+    out_b, out_s, out_l = multiclass_nms(
+        np.empty((0, 4), dtype=np.float32), np.empty(0, dtype=np.float32), np.empty(0, dtype=int)
+    )
+    assert out_b.shape == (0, 4)
+    assert out_s.size == 0
+    assert out_l.size == 0
 
 
 # -------------------------------------------------------------------- IoU / σ
@@ -195,6 +212,31 @@ def test_decode_drops_boxes_below_the_confidence_threshold():
         conf_thr=0.5,
     )
     assert len(boxes) == 0
+
+
+def test_decode_drops_a_zero_area_box_that_passed_the_confidence_filter():
+    # score 0.9 clears conf_thr, so this exercises the *degeneracy* guard
+    # (w = h = 0 -> x2 == x1) rather than the confidence guard
+    boxes, scores, labels = decode(
+        _pred(320, 320, 0, 0, cls=5, score=0.9),
+        ratio=1.0,
+        pad=(0, 0),
+        orig_wh=(640, 640),
+    )
+    assert len(boxes) == 0
+    assert len(scores) == 0
+    assert len(labels) == 0
+
+
+def test_decode_keeps_a_small_but_non_degenerate_box():
+    # 2x2 px is tiny yet strictly non-zero, so it must survive the same guard
+    boxes, _, _ = decode(
+        _pred(320, 320, 2, 2, cls=5, score=0.9),
+        ratio=1.0,
+        pad=(0, 0),
+        orig_wh=(640, 640),
+    )
+    assert boxes[0].tolist() == pytest.approx([319, 319, 321, 321])
 
 
 def test_decode_clips_to_the_original_image_bounds():

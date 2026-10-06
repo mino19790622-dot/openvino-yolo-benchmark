@@ -47,3 +47,8 @@
 - **Change**: tests/test_yolo_utils.py: 给 _iou_matrix 补 2 个测试 —— ① 任一侧为空时返回形状正确的全零矩阵 ((1,0)/(0,1)/(0,0))，验证调用方无需先做空判断；② 零面积退化框使并集为 0，靠 1e-9 兜底返回 0.0 而非 nan/inf（np.isfinite 断言），保证 mAP 不会被污染。纯测试新增，无生产代码改动。
 - **Verification**: pytest 24 passed (24 collected in tests/test_yolo_utils.py, 由 22 -> 24); ruff check tests/test_yolo_utils.py: All checks passed
 
+## 2026-10-06 — Add edge-case tests for NMS and decode
+
+- **Change**: tests/test_yolo_utils.py: +4 tests covering previously untested branches - single-box NMS (order.size==1 early break), multiclass_nms on empty input (the 'if not out_b' early return), decode's zero-area degeneracy guard (w=h=0 passes conf_thr but must be dropped), and a 2x2 px non-degenerate box that must survive the same guard. Test-only, production code untouched.
+- **Verification**: pytest 28 passed (was 24); ruff All checks passed
+
