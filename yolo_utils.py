@@ -73,7 +73,19 @@ def nms(boxes: np.ndarray, scores: np.ndarray, iou_thr: float) -> np.ndarray:
 
 def multiclass_nms(boxes, scores, labels, conf_thr=0.001, iou_thr=0.7,
                    max_det=300) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """按类别分别做 NMS（与 ultralytics 默认行为一致）。"""
+    """按类别分别做 NMS（与 ultralytics 默认行为一致）。
+
+    注意 ``conf_thr`` 只是为了与 decode() 的签名对齐而保留，**本函数并不使用它**：
+    置信度过滤发生在 decode() 里的 ``scores > conf_thr`` 那一步。直接调用本函数时，
+    传进来的框会全部参与，只受各类别 NMS 与 ``max_det`` 约束；若需要按置信度裁剪，
+    请在调用前自行过滤，否则会得到比预期更多的框。
+
+    ``max_det`` 是在各类别结果拼接**之后**统一施加的，保留全局得分最高的若干个，
+    因此某个类别不会因为类别总数少而独占配额，类别多的一方也不会被整体截断。
+
+    返回 (boxes, scores, labels)，三者的行数一致；输入为空时返回三个空数组，
+    其中 boxes 的形状是 (0, 4) 而不是 (0,)，调用方无需特判。
+    """
     out_b, out_s, out_l = [], [], []
     for c in np.unique(labels):
         m = labels == c

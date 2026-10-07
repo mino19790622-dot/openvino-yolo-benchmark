@@ -52,3 +52,8 @@
 - **Change**: tests/test_yolo_utils.py: +4 tests covering previously untested branches - single-box NMS (order.size==1 early break), multiclass_nms on empty input (the 'if not out_b' early return), decode's zero-area degeneracy guard (w=h=0 passes conf_thr but must be dropped), and a 2x2 px non-degenerate box that must survive the same guard. Test-only, production code untouched.
 - **Verification**: pytest 28 passed (was 24); ruff All checks passed
 
+## 2026-10-07 — multiclass_nms 的 conf_thr 是空参数
+
+- **Change**: yolo_utils.py 的 multiclass_nms() 收下 conf_thr 但函数体从未引用它（grep 全仓：该名字只在签名第 74 行与调用方 decode() 第 156 行出现）；真正按置信度过滤的是 decode() 里的 scores > conf_thr。补 docstring 写明这一点，避免有人直接调用 multiclass_nms 时误以为传 conf_thr 就能裁剪。同时写明 max_det 是在各类别结果拼接之后全局施加（保留全局 top 分），以及空输入返回 (0,4)/(0,)/(0,) 三件套。仅文档，无行为变更。
+- **Verification**: pytest 28 passed（与 --collect-only 的 tests/test_yolo_utils.py: 28 一致）；ruff check yolo_utils.py -> All checks passed
+
