@@ -133,6 +133,11 @@ def make_eval_set(which: str = "coco128", **kw):
 
     which='coco128'  → 128 张，本地已有，秒开
     which='val2017'  → COCO 官方验证子集，需要联网下载图片
+
+    ``**kw`` **只转发给 Val2017Set**：``Coco128Set`` 不接受任何参数，所以
+    ``make_eval_set("coco128", limit=50)`` 里的 ``limit`` 会被**静默丢弃** ——
+    既不报错也不裁剪，仍然跑满 128 张。``run_benchmark.py --limit`` 同理，
+    只有 ``--eval-set val2017`` 时才真正生效。
     """
     if which == "val2017":
         return Val2017Set(**kw)

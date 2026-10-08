@@ -57,3 +57,8 @@
 - **Change**: yolo_utils.py 的 multiclass_nms() 收下 conf_thr 但函数体从未引用它（grep 全仓：该名字只在签名第 74 行与调用方 decode() 第 156 行出现）；真正按置信度过滤的是 decode() 里的 scores > conf_thr。补 docstring 写明这一点，避免有人直接调用 multiclass_nms 时误以为传 conf_thr 就能裁剪。同时写明 max_det 是在各类别结果拼接之后全局施加（保留全局 top 分），以及空输入返回 (0,4)/(0,)/(0,) 三件套。仅文档，无行为变更。
 - **Verification**: pytest 28 passed（与 --collect-only 的 tests/test_yolo_utils.py: 28 一致）；ruff check yolo_utils.py -> All checks passed
 
+## 2026-10-08 — docs(eval): make_eval_set 的 **kw 只转发给 Val2017Set
+
+- **Change**: 给 make_eval_set 补 docstring：**kw 只转发给 Val2017Set；Coco128Set 不接受任何参数，故 make_eval_set('coco128', limit=50) 里的 limit 会被静默丢弃（不报错也不裁剪，仍跑满 128 张）。run_benchmark.py --limit 同理，仅在 --eval-set val2017 时生效。纯文档，无行为变化。
+- **Verification**: pytest 28 passed；ruff 仅 lint 改动文件 coco_eval_set.py → All checks passed
+
