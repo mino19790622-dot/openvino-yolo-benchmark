@@ -70,7 +70,7 @@ def cpu_name() -> str:
 # 1. ONNX -> IR
 # --------------------------------------------------------------------------
 def build_variants(size: int = 640, accuracy_control: bool = False):
-    """生成 FP32 / FP16 / INT8 / INT8-AWQ 四个 IR。返回 {tag: xml_path}"""
+    """生成 FP32 / FP16 / INT8 / INT8-AA 四个 IR。返回 {tag: xml_path}"""
     import nncf
 
     MODELS.mkdir(exist_ok=True)
@@ -122,9 +122,9 @@ def build_variants(size: int = 640, accuracy_control: bool = False):
     out["INT8"] = int8
 
     # ---- accuracy-aware quantisation（rank-based 敏感度回退）----
-    awq = MODELS / "yolov8n_int8_awq" / "yolov8n_int8_awq.xml"
-    if accuracy_control and not awq.exists():
-        hr("NNCF accuracy-aware quantisation (把敏感层回退到 FP16/FP32)")
+    aa = MODELS / "yolov8n_int8_aa" / "yolov8n_int8_aa.xml"
+    if accuracy_control and not aa.exists():
+        hr("NNCF accuracy-aware quantisation (把敏感层回退到 FP32)")
         samples = U.load_coco128()
         # 三份数据严格分开：校准 / 敏感度调参 / 最终测试(外部 val2017)
         calib_items = [s["image"] for s in samples[32:]]
@@ -165,9 +165,9 @@ def build_variants(size: int = 640, accuracy_control: bool = False):
             preset=nncf.QuantizationPreset.PERFORMANCE,
             target_device=nncf.TargetDevice.CPU,
         )
-        ov.save_model(q, str(awq))
+        ov.save_model(q, str(aa))
     if accuracy_control:
-        out["INT8-AWQ"] = awq
+        out["INT8-AA"] = aa
 
     for tag, p in out.items():
         mb = (p.with_suffix(".bin").stat().st_size) / 1e6

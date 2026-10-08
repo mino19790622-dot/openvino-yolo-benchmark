@@ -13,13 +13,14 @@
 
 | Precision | Latency ms | Throughput FPS | Weights MB | Speed-up |
 |---|---|---|---|---|
-| FP32 | 55.60 | 17.99 | 12.71 | 1.00× |
-| FP16 | 53.27 | 18.77 | 6.35 | 1.04× |
-| INT8 (PTQ) | 27.99 | 35.73 | 3.29 | **1.99×** |
-| INT8 (accuracy-aware) | 31.69 | 31.56 | 3.34 | 1.75× |
+| FP32 | 60.74 | 16.46 | 12.71 | 1.00× |
+| FP16 | 57.07 | 17.52 | 6.35 | 1.06× |
+| INT8 (PTQ) | 33.11 | 30.20 | 3.29 | **1.83×** |
+| INT8 (accuracy-aware) | 34.71 | 28.81 | 3.34 | 1.75× |
 
 Round-to-round spread: FP32 8.36 ms (first round is a cold-start outlier: 63.03 / 55.60 / 54.67),
-all others ≤ 1.7 ms.
+all others ≤ 1.7 ms. *(This spread comes from an earlier measurement round; the table above reports the
+latest round, which is stored in `results.json`. Per-round detail for the latest round is not persisted.)*
 
 ## Accuracy
 

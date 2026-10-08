@@ -18,11 +18,11 @@
     "FP16_50": 0.5541,
     "INT8": 0.3455,
     "INT8_50": 0.5296,
-    "INT8-AWQ": 0.3897,
-    "INT8-AWQ_50": 0.544,
+    "INT8-AA": 0.3897,
+    "INT8-AA_50": 0.544,
     "delta_FP16": -0.0005,
     "delta_INT8": -0.058,
-    "delta_INT8-AWQ": -0.0138
+    "delta_INT8-AA": -0.0138
   },
   "runs": [
     {
@@ -58,7 +58,7 @@
       "latency_mean_ms": 35.48,
       "latency_p95_ms": 41.74,
       "fps": 28.81,
-      "precision": "INT8-AWQ",
+      "precision": "INT8-AA",
       "model_mb": 3.34
     }
   ]
