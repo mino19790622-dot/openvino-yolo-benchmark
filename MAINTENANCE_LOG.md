@@ -62,3 +62,8 @@
 - **Change**: 给 make_eval_set 补 docstring：**kw 只转发给 Val2017Set；Coco128Set 不接受任何参数，故 make_eval_set('coco128', limit=50) 里的 limit 会被静默丢弃（不报错也不裁剪，仍跑满 128 张）。run_benchmark.py --limit 同理，仅在 --eval-set val2017 时生效。纯文档，无行为变化。
 - **Verification**: pytest 28 passed；ruff 仅 lint 改动文件 coco_eval_set.py → All checks passed
 
+## 2026-10-09 — test(map): cover GT-only and GT-free images in compute_coco_map
+
+- **Change**: Add 2 tests to tests/test_yolo_utils.py. (1) an image that has ground truth but zero detections is skipped while ranking yet still counted in npos -> mAP50 = 51/101. (2) a detection on an image with no ground truth can never match, so when it outranks the single true positive precision at recall 1.0 drops to 1/2 -> mAP50 = 0.5. Both branches were previously untested (coverage 84% -> 86%). Assertion values were obtained by running compute_coco_map first, not estimated. No production code touched.
+- **Verification**: ok=true; pytest 30 passed (was 28, +2); ruff All checks passed on tests/test_yolo_utils.py
+

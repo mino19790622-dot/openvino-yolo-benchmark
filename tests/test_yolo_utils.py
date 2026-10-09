@@ -318,3 +318,29 @@ def test_map_without_any_detection_reports_no_evaluated_class():
     # the class is still recorded, but with no AP attached
     assert res["per_class"][5]["npos"] == 1
     assert res["per_class"][5]["map"] is None
+
+
+def test_map_an_image_with_gt_but_no_detection_only_caps_recall():
+    # 2 GT boxes across 2 images but only 1 detection -> recall stops at 0.5,
+    # so AP is 51/101 exactly like the single-image partial-recall case. The
+    # GT-only image is skipped while ranking, not dropped from ``npos``.
+    hit = _one_image([[0, 0, 10, 10]], [5], [[0, 0, 10, 10]], [0.9], [5])
+    no_det = _one_image([[0, 0, 10, 10]], [5], [], [], [])
+    res = compute_coco_map([hit, no_det])
+    assert res["mAP50"] == pytest.approx(51 / 101)
+    assert res["mAP50-95"] == pytest.approx(51 / 101)
+    assert res["per_class"][5]["npos"] == 2
+    assert res["per_class"][5]["nimg_gt"] == 2
+
+
+def test_map_a_detection_on_an_image_without_gt_is_a_false_positive():
+    # The GT-free image contributes one detection that outranks the single
+    # true positive. It can never match, so precision at recall 1.0 is 1/2.
+    hit = _one_image([[0, 0, 10, 10]], [5], [[0, 0, 10, 10]], [0.5], [5])
+    fp_only = _one_image([], [], [[500, 500, 510, 510]], [0.9], [5])
+    res = compute_coco_map([hit, fp_only])
+    assert res["mAP50"] == pytest.approx(0.5)
+    assert res["mAP50-95"] == pytest.approx(0.5)
+    # only the image that actually carries a box counts towards npos
+    assert res["per_class"][5]["npos"] == 1
+    assert res["per_class"][5]["nimg_gt"] == 1
