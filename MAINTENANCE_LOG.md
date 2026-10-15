@@ -67,3 +67,8 @@
 - **Change**: Add 2 tests to tests/test_yolo_utils.py. (1) an image that has ground truth but zero detections is skipped while ranking yet still counted in npos -> mAP50 = 51/101. (2) a detection on an image with no ground truth can never match, so when it outranks the single true positive precision at recall 1.0 drops to 1/2 -> mAP50 = 0.5. Both branches were previously untested (coverage 84% -> 86%). Assertion values were obtained by running compute_coco_map first, not estimated. No production code touched.
 - **Verification**: ok=true; pytest 30 passed (was 28, +2); ruff All checks passed on tests/test_yolo_utils.py
 
+## 2026-10-15 — docs(parity): document the C++/Python host-side contract
+
+- **Change**: cpp_python_parity.py: 给 dump_raw_bgr / run_cpp / run_python 三个此前无 docstring 的函数补上文档，记录两侧接口契约 —— (1) dump_raw_bgr 写出的裸格式是 int32 H + int32 W + H*W*3 字节 BGR，与 yolo_infer_cpp.cpp 声明的 raw_bgr.bin 格式一一对应，任一侧改头字段顺序 parity 即失去意义；(2) run_cpp 故意只传 4 个参数不传 conf/iou，依赖 C++ 侧默认 conf=0.001 / iou=0.7 与 U.decode() 默认参数相同，故两边仍是同一套阈值；(3) run_python 丢弃前 5 次 warm-up 后取各阶段中位数（与 C++ 侧 warmup=5 口径一致），dets 取最后一次迭代的框数用于与 C++ 核对。同时清掉该文件 5 处【既有】ruff 告警：EXE001 给带 shebang 的脚本 chmod +x；PLW1510 显式 check=False；RUF059 x2 未使用的 s/l 改名为 _s/_l；F541 去掉无占位符的 f 前缀。全部为行为等价改动：未改业务逻辑、未重构、未增删依赖、未动 .github/workflows。
+- **Verification**: ok=true; pytest 30 passed; ruff check cpp_python_parity.py: All checks passed; py_compile 通过
+

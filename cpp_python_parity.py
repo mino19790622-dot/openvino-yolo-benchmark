@@ -30,6 +30,12 @@ EXE = ROOT / "benchmark_cpp" / "build" / "yolo_infer_cpp"
 
 
 def dump_raw_bgr(im: np.ndarray, path: Path) -> None:
+    """把 BGR 图写成 C++ 侧能读的裸格式，作为两边的数据接口。
+
+    布局为 ``int32 H, int32 W`` 后紧跟 ``H*W*3`` 字节 BGR，与
+    ``benchmark_cpp/yolo_infer_cpp.cpp`` 里声明的 ``raw_bgr.bin`` 格式一一对应；
+    两边任何一侧改了这里的头字段顺序，parity 结果就失去意义。
+    """
     h, w = im.shape[:2]
     with open(path, "wb") as f:
         f.write(struct.pack("ii", h, w))
@@ -37,11 +43,18 @@ def dump_raw_bgr(im: np.ndarray, path: Path) -> None:
 
 
 def run_cpp(xml: Path, bin_path: Path, device: str, iters: int) -> dict:
+    """跑一次 C++ 推理，把 stdout 里的 ``KV k=v`` 行解析成 dict。
+
+    这里**故意只传 4 个参数**，不传 conf/iou：C++ 侧的默认值是
+    ``conf=0.001, iou=0.7``（``yolo_infer_cpp.cpp`` 的 ``main``），与
+    ``U.decode()`` 的默认参数相同，所以两边在不显式传参的情况下仍是同一套阈值。
+    解析不到任何 KV 行时把原始 stdout 打出来再退出，方便定位编译/路径问题。
+    """
     if not EXE.exists():
         raise SystemExit(f"找不到 {EXE}，请先编译 benchmark_cpp/")
     out = subprocess.run(
         [str(EXE), str(xml), str(bin_path), device, str(iters)],
-        capture_output=True, text=True,
+        capture_output=True, text=True, check=False,
     ).stdout
     kv = {}
     for line in out.splitlines():
@@ -56,6 +69,12 @@ def run_cpp(xml: Path, bin_path: Path, device: str, iters: int) -> dict:
 
 
 def run_python(xml: Path, im: np.ndarray, device: str, iters: int) -> dict:
+    """用 numpy + OpenVINO 跑同一张图，返回各阶段耗时中位数与检测框数。
+
+    逐次计时 pre/infer/post/total 四个阶段，但**丢掉前 5 次迭代**（warm-up）后才
+    开始累计，与 C++ 侧的口径一致；最终取中位数而不是均值，避免单次抖动主导结果。
+    ``dets`` 取最后一次迭代的框数，用来与 C++ 侧做一致性核对。
+    """
     core = ov.Core()
     compiled = core.compile_model(core.read_model(str(xml)), device)
     oname = compiled.output().get_any_name()
@@ -68,7 +87,8 @@ def run_python(xml: Path, im: np.ndarray, device: str, iters: int) -> dict:
         t1 = time.perf_counter()
         p = compiled([x])[oname]
         t2 = time.perf_counter()
-        b, s, l = U.decode(p, r, pad, (w, h))
+        # 只需要框数；scores/labels 用不上，前缀下划线表示有意丢弃
+        b, _s, _l = U.decode(p, r, pad, (w, h))
         t3 = time.perf_counter()
         if it >= 5:
             t_pre.append((t1 - t0) * 1000)
@@ -132,7 +152,7 @@ def main() -> None:
     Path("results").mkdir(exist_ok=True)
     import json
     (Path("results") / "cpp_python_parity.json").write_text(json.dumps(out, indent=2))
-    print(f"\n已写入 results/cpp_python_parity.json")
+    print("\n已写入 results/cpp_python_parity.json")
 
 
 if __name__ == "__main__":
