@@ -28,12 +28,29 @@ MODELS = {
 
 
 def build_input(compiled) -> np.ndarray:
+    """按模型声明的输入形状造一份**确定性**的随机输入。
+
+    形状取自 ``compiled.input().get_shape()``，所以 FP32 与 INT8 两个模型只要输入签名
+    一致，拿到的就是逐元素相同的数据 —— 两者之间的延迟差才是纯粹的量化差异，
+    而不是「喂了不同数据」。随机数种子固定为 0（``default_rng(0)``），
+    保证跨轮次、跨进程可复现：换一批数据会换掉缓存命中模式，benchmark 数字就漂了。
+    """
     shape = list(compiled.input().get_shape())
     rng = np.random.default_rng(0)
     return rng.random(shape, dtype=np.float32)
 
 
 def measure_sync(compiled, data, iters: int, warmup: int = 10) -> dict:
+    """单请求串行推理，返回中位延迟与由其倒数推出的 FPS。
+
+    口径说明：
+        · 前 ``warmup`` 次不计入统计 —— 首次 infer 含插件初始化与缓存建立，明显偏慢；
+        · 计时只包住 ``req.infer()``，``set_input_tensor`` 的拷贝开销被排除在外；
+        · 取**中位数**而非均值，避免偶发调度抖动把结果拉高。
+
+    返回 ``{"latency_ms", "fps"}``，其中 fps 是单流串行的倒数（1000 / 中位延迟），
+    所以它衡量的是**延迟**而非吞吐，与 :func:`measure_async` 的 fps 不是同一个量。
+    """
     req = compiled.create_infer_request()
     for _ in range(warmup):
         req.set_input_tensor(ov.Tensor(data))
@@ -123,8 +140,8 @@ def main() -> None:
     (Path("results") / "async_bench.json").write_text(json.dumps(results, indent=2))
 
     lines = ["| Model | Mode | Latency ms | Throughput FPS |", "|---|---|---|---|"]
-    for tag in results:
-        for mode, r in results[tag].items():
+    for tag, per_model in results.items():
+        for mode, r in per_model.items():
             if mode.startswith("_"):
                 continue
             lines.append(f"| {tag} | {mode} | {r['latency_ms']:.2f} | {r['fps']:.2f} |")

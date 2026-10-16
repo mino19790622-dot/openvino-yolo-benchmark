@@ -72,3 +72,8 @@
 - **Change**: cpp_python_parity.py: 给 dump_raw_bgr / run_cpp / run_python 三个此前无 docstring 的函数补上文档，记录两侧接口契约 —— (1) dump_raw_bgr 写出的裸格式是 int32 H + int32 W + H*W*3 字节 BGR，与 yolo_infer_cpp.cpp 声明的 raw_bgr.bin 格式一一对应，任一侧改头字段顺序 parity 即失去意义；(2) run_cpp 故意只传 4 个参数不传 conf/iou，依赖 C++ 侧默认 conf=0.001 / iou=0.7 与 U.decode() 默认参数相同，故两边仍是同一套阈值；(3) run_python 丢弃前 5 次 warm-up 后取各阶段中位数（与 C++ 侧 warmup=5 口径一致），dets 取最后一次迭代的框数用于与 C++ 核对。同时清掉该文件 5 处【既有】ruff 告警：EXE001 给带 shebang 的脚本 chmod +x；PLW1510 显式 check=False；RUF059 x2 未使用的 s/l 改名为 _s/_l；F541 去掉无占位符的 f 前缀。全部为行为等价改动：未改业务逻辑、未重构、未增删依赖、未动 .github/workflows。
 - **Verification**: ok=true; pytest 30 passed; ruff check cpp_python_parity.py: All checks passed; py_compile 通过
 
+## 2026-10-16 — docs(async): document build_input/measure_sync; clear 2 lint errors
+
+- **Change**: async_bench.py: 给两个此前无 docstring 的函数补文档 —— (1) build_input 用 default_rng(0) 造确定性输入，形状取自 compiled.input().get_shape()，故 FP32/INT8 两模型输入签名一致时拿到的是逐元素相同的数据，延迟差才是纯量化差异；固定种子保证跨轮次可复现（换数据会改缓存命中模式，数字会漂）。(2) measure_sync 写明统计口径：前 10 次 warmup 不计入（首次 infer 含插件初始化与缓存建立）；计时只包住 req.infer()，set_input_tensor 的拷贝开销被排除；取中位数而非均值以抗调度抖动；并点明其 fps = 1000/中位延迟 是延迟的倒数，与 measure_async 的 fps 不是同一个量。同时清掉该文件 2 处【既有】ruff 告警：EXE001 给带 shebang 的脚本 chmod +x（git 文件模式 100644->100755，唯一修法）；PLC0206 把 for tag in results: / results[tag].items() 改为 for tag, per_model in results.items(): / per_model.items()（仅最后一处 markdown 表格生成循环，已用等价性脚本验证新旧两版输出逐行相同）。全部行为等价：未改业务逻辑、未重构、未增删依赖、未动 .github/workflows。
+- **Verification**: ok=true; pytest 30 passed (与 --collect-only 的 tests/test_yolo_utils.py: 30 自洽); ruff check async_bench.py: All checks passed; py_compile 通过; 新旧循环输出等价性脚本 identical=True
+
