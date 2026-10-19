@@ -77,3 +77,8 @@
 - **Change**: async_bench.py: 给两个此前无 docstring 的函数补文档 —— (1) build_input 用 default_rng(0) 造确定性输入，形状取自 compiled.input().get_shape()，故 FP32/INT8 两模型输入签名一致时拿到的是逐元素相同的数据，延迟差才是纯量化差异；固定种子保证跨轮次可复现（换数据会改缓存命中模式，数字会漂）。(2) measure_sync 写明统计口径：前 10 次 warmup 不计入（首次 infer 含插件初始化与缓存建立）；计时只包住 req.infer()，set_input_tensor 的拷贝开销被排除；取中位数而非均值以抗调度抖动；并点明其 fps = 1000/中位延迟 是延迟的倒数，与 measure_async 的 fps 不是同一个量。同时清掉该文件 2 处【既有】ruff 告警：EXE001 给带 shebang 的脚本 chmod +x（git 文件模式 100644->100755，唯一修法）；PLC0206 把 for tag in results: / results[tag].items() 改为 for tag, per_model in results.items(): / per_model.items()（仅最后一处 markdown 表格生成循环，已用等价性脚本验证新旧两版输出逐行相同）。全部行为等价：未改业务逻辑、未重构、未增删依赖、未动 .github/workflows。
 - **Verification**: ok=true; pytest 30 passed (与 --collect-only 的 tests/test_yolo_utils.py: 30 自洽); ruff check async_bench.py: All checks passed; py_compile 通过; 新旧循环输出等价性脚本 identical=True
 
+## 2026-10-19 — document the measure_async timing and throughput contract
+
+- **Change**: async_bench.py: 给 measure_async 补 docstring，记录三条此前只存在于代码里的口径 —— ① warmup 提交同样会进回调，靠 wait_all() 后 latencies.clear() 丢弃；② 单请求延迟以该请求的提交时刻（经 userdata 传入）为起点，因此是含排队等待的队列驻留时间，深队列下必然大于 measure_sync 的同类数字；③ fps 用 iters*1000/wall 算，是聚合吞吐，与 measure_sync 里中位延迟取倒数的 fps 不是同一个量。另记录返回三键及无回调时 latency_ms 为 nan、wall_ms 仍有效。
+- **Verification**: pytest: 30 passed（collect-only 复算 files=1 total_tests=30）；ruff check async_bench.py: All checks passed
+

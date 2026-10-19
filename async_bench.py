@@ -66,7 +66,21 @@ def measure_sync(compiled, data, iters: int, warmup: int = 10) -> dict:
 
 
 def measure_async(compiled, data, iters: int, nstreams: int, warmup: int = 10) -> dict:
-    """用一个深度为 nstreams 的 AsyncInferQueue 提交 iters 次，测总墙钟吞吐与单请求延迟。"""
+    """用一个深度为 nstreams 的 AsyncInferQueue 提交 iters 次，测总墙钟吞吐与单请求延迟。
+
+    口径说明：
+        · 前 ``warmup`` 次提交不计入统计 —— 回调同样会 append，故 ``wait_all()`` 之后
+          直接 ``latencies.clear()`` 把它们丢掉，而不是另开一个计数器；
+        · 单请求延迟由回调测得，起点是该请求的**提交时刻**（经 ``userdata`` 传入），
+          终点是完成时刻 ⇒ 它包含排队等待，是**队列驻留时间**而非纯计算时间；
+          队列越深，这个数就越大于 :func:`measure_sync` 的同类数字；
+        · ``fps`` 用 ``iters * 1000 / wall`` 算，``wall`` 覆盖「整批提交开始 → 全部完成」
+          的墙钟时间 ⇒ 这是**聚合吞吐**，与 :func:`measure_sync` 里「中位延迟取倒数」
+          得到的 fps 不是同一个量，两者不可直接横向比较。
+
+    返回 ``{"latency_ms", "fps", "wall_ms"}``；若一个回调都没落库，``latency_ms`` 为 nan，
+    而 ``wall_ms`` 仍然有效（它只依赖墙钟，不依赖回调）。
+    """
     q = ov.AsyncInferQueue(compiled, jobs=nstreams)
 
     latencies: list[float] = []
