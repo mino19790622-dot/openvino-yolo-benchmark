@@ -237,10 +237,32 @@ def _iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 def compute_coco_map(predictions, iou_thrs=IOU_THRS) -> dict:
-    """累进式 COCO 风格 mAP。
+    """累进式 COCO 风格 mAP（101 点插值，默认 10 个 IoU 阈值取平均）。
 
-    predictions: list[dict(gt_boxes, gt_classes, boxes, scores, labels)]
-    返回 dict(mAP50_95, mAP50, per_class_ap)
+    ``predictions`` 是**按同一图片顺序**排好的逐图记录，每条含
+    ``gt_boxes``/``gt_classes``/``boxes``/``scores``/``labels``，全部为原图坐标系下的
+    xyxy 与 0..79 的连续类别索引（见 :class:`Coco128Set` / :class:`Val2017Set`）。
+
+    返回的顶层键**只有四个**，且 mAP 键用的是**连字符**：
+
+        {"mAP50-95": float, "mAP50": float, "classes_evaluated": int,
+         "per_class": {int: dict}}
+
+    注意 ``res["mAP50_95"]`` 与 ``res["per_class_ap"]`` 都会抛 ``KeyError`` ——
+    历史上本 docstring 写的就是这两个名字，照着抄会直接崩。``run_benchmark.py``
+    用的是正确的 ``["mAP50-95"]``。
+
+    ``per_class`` 恒含全部 80 个类别（键为 int），但其中两类条目的**键名不一致**：
+    真正参与计分的条目有 ``map50_95``，被跳过的条目只有 ``map`` 且值为 ``None``
+    ⇒ 逐类取分时必须两者都试，或先判 ``"map50_95" in entry``。
+    两侧都带的 ``imgs`` 目前恒为 ``{}``（预留字段，从未填充）。
+
+    **跳过语义（最容易被误读的一条）**：某类别若 ``npos == 0``（无标注）**或
+    ``total_dets == 0``（模型一张都没检出该类别）**，就不进入均值，而不是记 0 分。
+    因此 ``mAP50``/``mAP50-95`` 的分母是 ``classes_evaluated``，不是 80 ——
+    一个把某类**完全漏掉**的模型不会被该类拉低分数，指标因此偏乐观。
+    跨模型比较时请一并看 ``classes_evaluated`` 是否相同。
+    一个类别都没能计分时（例如全空输入），两个 mAP 均为 ``nan`` 而非 0。
     """
     aps_5095, aps50, detail = [], [], {}
 

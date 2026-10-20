@@ -82,3 +82,8 @@
 - **Change**: async_bench.py: 给 measure_async 补 docstring，记录三条此前只存在于代码里的口径 —— ① warmup 提交同样会进回调，靠 wait_all() 后 latencies.clear() 丢弃；② 单请求延迟以该请求的提交时刻（经 userdata 传入）为起点，因此是含排队等待的队列驻留时间，深队列下必然大于 measure_sync 的同类数字；③ fps 用 iters*1000/wall 算，是聚合吞吐，与 measure_sync 里中位延迟取倒数的 fps 不是同一个量。另记录返回三键及无回调时 latency_ms 为 nan、wall_ms 仍有效。
 - **Verification**: pytest: 30 passed（collect-only 复算 files=1 total_tests=30）；ruff check async_bench.py: All checks passed
 
+## 2026-10-20 — docs(map): 修正 compute_coco_map 返回值文档并写明跳过语义
+
+- **Change**: yolo_utils.py::compute_coco_map() 的 docstring 与代码实际返回不符：原文写 'mAP50_95' 与 'per_class_ap'，实测两键均不存在（KeyError），真实键为 'mAP50-95'（连字符）/ 'mAP50' / 'classes_evaluated' / 'per_class'。改写后写明五条契约，全部经探针实测：① 顶层仅四键，mAP 键用连字符；② per_class 恒含 80 个 int 键，但条目键名不一致——计分条目有 map50_95，被跳过条目只有 map=None；③ imgs 恒为 {}（预留未填充）；④ 跳过语义：npos==0 或 total_dets==0 的类别不进均值而非记 0 分，故 mAP 分母是 classes_evaluated 不是 80，整类漏检不会被惩罚，指标偏乐观；⑤ 无类别计分时 mAP 为 nan 而非 0。+25/-3，纯文档。
+- **Verification**: pytest 30 passed; ruff All checks passed (yolo_utils.py)
+
