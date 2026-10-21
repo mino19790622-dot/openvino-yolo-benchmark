@@ -87,3 +87,8 @@
 - **Change**: yolo_utils.py::compute_coco_map() 的 docstring 与代码实际返回不符：原文写 'mAP50_95' 与 'per_class_ap'，实测两键均不存在（KeyError），真实键为 'mAP50-95'（连字符）/ 'mAP50' / 'classes_evaluated' / 'per_class'。改写后写明五条契约，全部经探针实测：① 顶层仅四键，mAP 键用连字符；② per_class 恒含 80 个 int 键，但条目键名不一致——计分条目有 map50_95，被跳过条目只有 map=None；③ imgs 恒为 {}（预留未填充）；④ 跳过语义：npos==0 或 total_dets==0 的类别不进均值而非记 0 分，故 mAP 分母是 classes_evaluated 不是 80，整类漏检不会被惩罚，指标偏乐观；⑤ 无类别计分时 mAP 为 nan 而非 0。+25/-3，纯文档。
 - **Verification**: pytest 30 passed; ruff All checks passed (yolo_utils.py)
 
+## 2026-10-21 — docs(readme): 修正目录树重复节点并补上缺失的 tests/
+
+- **Change**: README.md 的目录树有三处与 git ls-files 不符：① results/ 节点重复出现两次（一次只列两个 json、一次列 results.md 与 verify.json），树结构本身是坏的；② 漏了 results/results.json；③ tests/conftest.py、tests/test_yolo_utils.py、pytest.ini 整块缺失，README 全文从未提到仓库有测试。按 git ls-files 逐条重排目录树，并补一段说明：yolo_utils.py 只 import numpy 与 OpenCV，故不需要模型文件、也不 import openvino 就能跑测试。另把已跟踪但未列出的 benchmark_cpp/yolo_infer 标为早期草稿（实测 98 行 vs yolo_infer_cpp.cpp 308 行，文件头同名、措辞更旧）。纯文档 +16/-3，无代码改动。
+- **Verification**: ok=true; pytest 30 passed; 仅改 .md 故 lint 步骤跳过; git diff --stat 显示 README.md 1 file changed, 16 insertions(+), 3 deletions(-)
+

@@ -173,15 +173,29 @@ openvino-yolo-benchmark/
 ├── cpp_python_parity.py    C++ 与 Python 等价管线的逐阶段耗时对比
 ├── benchmark_cpp/
 │   ├── yolo_infer_cpp.cpp  完整 C++ 推理路径（手写 letterbox / 解码 / NMS，零 OpenCV 依赖）
+│   ├── yolo_infer          早期草稿（98 行），完整实现见 yolo_infer_cpp.cpp（308 行）
 │   ├── bench_cpp.cpp       纯推理计时器（只测模型）
 │   └── CMakeLists.txt      含 macOS libc++ 头文件路径的 workaround
-├── results/async_bench.json
-├── results/cpp_python_parity.json
+├── tests/
+│   ├── conftest.py         把仓库根目录塞进 sys.path，使 pytest 可在任意 cwd 下运行
+│   └── test_yolo_utils.py  yolo_utils.py 的单元测试（无需 OpenVINO / 模型文件）
 ├── results/
+│   ├── results.json        主流程的完整测量结果
 │   ├── results.md          生成的结果表
-│   └── verify.json         三轮重复测量的原始数据
+│   ├── verify.json         三轮重复测量的原始数据
+│   ├── async_bench.json    异步 / 多流对比的原始输出
+│   └── cpp_python_parity.json  C++ vs Python 逐阶段耗时
+├── pytest.ini              testpaths=tests，故裸跑 pytest 即可
+├── MAINTENANCE_LOG.md      逐次维护记录
+├── README.md
 └── requirements.txt
 ```
+
+前/后处理与 mAP 的数学部分刻意不依赖 OpenVINO —— `yolo_utils.py` 只 import numpy 与 OpenCV，
+所以**不需要模型文件、也不会 `import openvino` 就能跑测试**：
+`pip install -r requirements.txt pytest && pytest`。
+测试里的期望值是从几何关系手算出来的，不是从历史输出抄的 —— 数学一回归就会在这里失败，
+而不是让每个框悄悄偏移几像素。
 
 ---
 
