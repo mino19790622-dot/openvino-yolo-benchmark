@@ -92,3 +92,8 @@
 - **Change**: README.md 的目录树有三处与 git ls-files 不符：① results/ 节点重复出现两次（一次只列两个 json、一次列 results.md 与 verify.json），树结构本身是坏的；② 漏了 results/results.json；③ tests/conftest.py、tests/test_yolo_utils.py、pytest.ini 整块缺失，README 全文从未提到仓库有测试。按 git ls-files 逐条重排目录树，并补一段说明：yolo_utils.py 只 import numpy 与 OpenCV，故不需要模型文件、也不 import openvino 就能跑测试。另把已跟踪但未列出的 benchmark_cpp/yolo_infer 标为早期草稿（实测 98 行 vs yolo_infer_cpp.cpp 308 行，文件头同名、措辞更旧）。纯文档 +16/-3，无代码改动。
 - **Verification**: ok=true; pytest 30 passed; 仅改 .md 故 lint 步骤跳过; git diff --stat 显示 README.md 1 file changed, 16 insertions(+), 3 deletions(-)
 
+## 2026-10-22 — docs(parity): pin the iters>=6 precondition of run_python
+
+- **Change**: cpp_python_parity.py::run_python 补 docstring，+9 行，纯文档。写明 warm-up=5 带来的隐含下限：iters<=5 时四个采样列表全空、statistics.median([]) 抛 StatisticsError，而 --iters 在 main() 里无下限校验，故错发生在 C++ 侧已跑完之后；同一边界上两侧不一致——C++ median_of() 对空 vector 返回 0.0（打印 0.00 ms，像极快而非无数据），Python 抛异常；dets 只在 it>=5 分支赋值故退化输入下停在 0，而 C++ last_dets 每次迭代都更新，该格不可比。三条均用一次性探针实测（iters=4/5 -> samples=0 且 EXC StatisticsError；iters=6 -> samples=1）并核对 C++ 源码 median_of/yolo_infer_cpp.cpp:218-228,268-292 后落笔。
+- **Verification**: ok:true — pytest 30 passed；ruff All checks passed（仅 lint 改动文件 cpp_python_parity.py）
+

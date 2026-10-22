@@ -74,6 +74,14 @@ def run_python(xml: Path, im: np.ndarray, device: str, iters: int) -> dict:
     逐次计时 pre/infer/post/total 四个阶段，但**丢掉前 5 次迭代**（warm-up）后才
     开始累计，与 C++ 侧的口径一致；最终取中位数而不是均值，避免单次抖动主导结果。
     ``dets`` 取最后一次迭代的框数，用来与 C++ 侧做一致性核对。
+
+    隐含前提：``iters`` **必须 ≥ 6**。``--iters 5`` 时四次采样列表全为空，
+    ``statistics.median([])`` 直接抛 ``StatisticsError: no median for empty data``；
+    ``--iters`` 在 :func:`main` 里没有任何下限校验，所以这个错是在**跑完 C++ 侧之后**
+    才炸的。同一边界上两侧行为**不一致**：C++ 的 ``median_of()`` 对空 vector 返回
+    ``0.0``（打印成 ``0.00 ms``，看起来像「极快」而非「无数据」），Python 则抛异常。
+    ``dets`` 同理只在 ``it >= 5`` 分支里赋值，``iters <= 5`` 时会停在 ``0`` ——
+    而 C++ 的 ``last_dets`` 每次迭代都更新，故这一格在退化输入下也不可比。
     """
     core = ov.Core()
     compiled = core.compile_model(core.read_model(str(xml)), device)
