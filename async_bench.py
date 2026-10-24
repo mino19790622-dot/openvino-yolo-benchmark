@@ -87,6 +87,17 @@ def measure_async(compiled, data, iters: int, nstreams: int, warmup: int = 10) -
     start_times: list[float] = []
 
     def cb(request, userdata) -> None:
+        """AsyncInferQueue 的完成回调：把「提交 → 完成」的驻留时间记进共享列表。
+
+        两点约定：
+            · ``userdata`` 必须是**提交时刻**的 ``time.perf_counter()`` ——
+              回调只做 ``now - userdata``，漏传或传 None 会在回调线程里抛 TypeError；
+            · 回调由 OpenVINO 的工作线程触发，``list.append`` 在 CPython 下是原子的，
+              所以这里不加锁；但落库顺序不代表完成顺序，调用方只能取中位数。
+
+        预热期的样本不在这里过滤 —— 由调用方在 ``wait_all()`` 之后 ``latencies.clear()``
+        统一丢掉，回调只负责「有一次完成就记一次」。
+        """
         latencies.append((time.perf_counter() - userdata) * 1000)
 
     q.set_callback(cb)

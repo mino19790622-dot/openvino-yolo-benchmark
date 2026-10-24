@@ -97,3 +97,8 @@
 - **Change**: cpp_python_parity.py::run_python 补 docstring，+9 行，纯文档。写明 warm-up=5 带来的隐含下限：iters<=5 时四个采样列表全空、statistics.median([]) 抛 StatisticsError，而 --iters 在 main() 里无下限校验，故错发生在 C++ 侧已跑完之后；同一边界上两侧不一致——C++ median_of() 对空 vector 返回 0.0（打印 0.00 ms，像极快而非无数据），Python 抛异常；dets 只在 it>=5 分支赋值故退化输入下停在 0，而 C++ last_dets 每次迭代都更新，该格不可比。三条均用一次性探针实测（iters=4/5 -> samples=0 且 EXC StatisticsError；iters=6 -> samples=1）并核对 C++ 源码 median_of/yolo_infer_cpp.cpp:218-228,268-292 后落笔。
 - **Verification**: ok:true — pytest 30 passed；ruff All checks passed（仅 lint 改动文件 cpp_python_parity.py）
 
+## 2026-10-24 — docs(async): document the AsyncInferQueue callback contract
+
+- **Change**: 为 async_bench.py 的 measure_async 内部回调 cb() 补 docstring：钉住三件事 —— userdata 必须是提交时刻的 perf_counter()（漏传会在回调线程抛 TypeError）、回调跑在 OpenVINO 工作线程故不加锁但落库顺序不等于完成顺序（只能取中位数）、预热样本由调用方 wait_all() 后 latencies.clear() 统一丢弃。纯注释改动，不改运行时行为。
+- **Verification**: pytest 30 passed（30 个点、无 F/E）；ruff check async_bench.py: All checks passed
+
