@@ -333,6 +333,32 @@ def test_map_an_image_with_gt_but_no_detection_only_caps_recall():
     assert res["per_class"][5]["nimg_gt"] == 2
 
 
+def test_map50_tracks_the_first_supplied_iou_threshold():
+    # IoU(det, gt) = 60/100 = 0.6, so with the default ladder it clears the
+    # 0.50/0.55/0.60 rungs -> mAP50 = 1.0 while mAP50-95 = 3/10. Shrinking the
+    # ladder to (0.4, 0.9) keeps the first rung at 1.0 ("mAP50") and moves the
+    # mean to 1/2 -- i.e. mAP50 is ap_per_iou[0], not a fixed IoU-0.5 score.
+    img = _one_image([[0, 0, 10, 10]], [5], [[0, 0, 6, 10]], [0.9], [5])
+    default = compute_coco_map([img])
+    assert default["mAP50"] == pytest.approx(1.0)
+    assert default["mAP50-95"] == pytest.approx(0.3)
+
+    custom = compute_coco_map([img], iou_thrs=(0.4, 0.9))
+    assert custom["mAP50"] == pytest.approx(1.0)
+    assert custom["mAP50-95"] == pytest.approx(0.5)
+
+
+def test_map50_under_a_custom_ladder_is_not_an_iou_0_5_score():
+    # The same 0.6-IoU detection, but the ladder now starts at 0.75: nothing
+    # matches. Reading "mAP50 == 0" as "fails at IoU 0.5" would be wrong -- it
+    # fails at IoU 0.75. The class is still evaluated, it just scores zero.
+    img = _one_image([[0, 0, 10, 10]], [5], [[0, 0, 6, 10]], [0.9], [5])
+    res = compute_coco_map([img], iou_thrs=(0.75,))
+    assert res["mAP50"] == pytest.approx(0.0)
+    assert res["mAP50-95"] == pytest.approx(0.0)
+    assert res["classes_evaluated"] == 1
+
+
 def test_map_a_detection_on_an_image_without_gt_is_a_false_positive():
     # The GT-free image contributes one detection that outranks the single
     # true positive. It can never match, so precision at recall 1.0 is 1/2.

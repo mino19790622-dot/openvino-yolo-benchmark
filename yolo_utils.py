@@ -263,6 +263,16 @@ def compute_coco_map(predictions, iou_thrs=IOU_THRS) -> dict:
     一个把某类**完全漏掉**的模型不会被该类拉低分数，指标因此偏乐观。
     跨模型比较时请一并看 ``classes_evaluated`` 是否相同。
     一个类别都没能计分时（例如全空输入），两个 mAP 均为 ``nan`` 而非 0。
+
+    **``iou_thrs`` 的隐含约定（改这个参数前必读）**：``mAP50-95`` 是全部阈值上 AP 的
+    算术平均，而 ``mAP50`` 取的其实是 **``iou_thrs[0]``**（源码里就是
+    ``aps50.append(ap_per_iou[0])``），只在默认的 ``IOU_THRS`` 从 0.50 起步时才等于
+    字面意义的 mAP@0.5。传自定义阈值后这个键名就名不副实：例如
+    ``iou_thrs=(0.4, 0.9)`` 时 ``mAP50`` 报的是 **@0.40** 的 AP，而 ``iou_thrs=(0.75,)``
+    时它报的是 **@0.75** 的 AP。因此自定义阈值下请只用 ``mAP50-95``（语义始终是"所给
+    阈值的平均"）做比较，或自己在调用侧重算，别把 ``mAP50`` 当 IoU 0.5 读。
+    ``iou_thrs`` 传空序列不会退化成 nan：先由 ``np.mean([])`` 抛 RuntimeWarning，
+    再在取 ``ap_per_iou[0]`` 时抛 ``IndexError`` —— 它是未设防的，调用方须保证非空。
     """
     aps_5095, aps50, detail = [], [], {}
 

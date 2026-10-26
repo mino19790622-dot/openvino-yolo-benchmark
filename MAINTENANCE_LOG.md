@@ -102,3 +102,8 @@
 - **Change**: 为 async_bench.py 的 measure_async 内部回调 cb() 补 docstring：钉住三件事 —— userdata 必须是提交时刻的 perf_counter()（漏传会在回调线程抛 TypeError）、回调跑在 OpenVINO 工作线程故不加锁但落库顺序不等于完成顺序（只能取中位数）、预热样本由调用方 wait_all() 后 latencies.clear() 统一丢弃。纯注释改动，不改运行时行为。
 - **Verification**: pytest 30 passed（30 个点、无 F/E）；ruff check async_bench.py: All checks passed
 
+## 2026-10-26 — docs(map): 钉住 iou_thrs 决定 mAP50 的隐含约定
+
+- **Change**: yolo_utils.py::compute_coco_map 的 docstring 补一段 iou_thrs 契约（+10 行，纯文档）：mAP50-95 是全部阈值上 AP 的算术平均，但 mAP50 取的其实是 iou_thrs[0]（源码 aps50.append(ap_per_iou[0])），只在默认 IOU_THRS 从 0.50 起步时才等于字面意义的 mAP@0.5。传自定义阈值后键名即名不副实：iou_thrs=(0.4,0.9) 时 mAP50 报的是 @0.40 的 AP，iou_thrs=(0.75,) 时报的是 @0.75 的 AP，故自定义阈值下只应用 mAP50-95 做比较。另写明 iou_thrs 传空序列不会退化成 nan：先由 np.mean([]) 抛 RuntimeWarning，再在取 ap_per_iou[0] 时抛 IndexError，调用方须保证非空。tests/test_yolo_utils.py 加 2 个测试钉住该行为（+26 行）：① 同一 0.6-IoU 检测在默认阈值下 mAP50=1.0 / mAP50-95=0.3，在 (0.4,0.9) 下 mAP50=1.0 / mAP50-95=0.5；② 换成 (0.75,) 后两者均为 0 且 classes_evaluated 仍为 1 —— 说明 mAP50=0 是「在 IoU 0.75 上没匹配」而非「在 0.5 上没匹配」。全部数值由一次性探针实测，未改任何运行时逻辑。
+- **Verification**: ok=true; pytest 32 passed（collect-only 复算 tests/test_yolo_utils.py: 32，改前 30，+2 自洽）; ruff All checks passed（仅 lint 改动文件 yolo_utils.py + tests/test_yolo_utils.py）; git diff --stat: 2 files changed, 36 insertions(+), 0 deletions
+
