@@ -49,19 +49,24 @@ def hr(t: str) -> None:
 
 
 def cpu_name() -> str:
+    """尽力取 CPU 型号名：sysctl（Darwin）→ /proc/cpuinfo（Linux）→ platform.processor()。
+
+    前两步都是「探测失败就静默回落」，`except: pass` 是有意的 —— 型号名只用于报告表头，
+    取不到不值得让整轮 benchmark 失败，也没有可用的 logger 可写。
+    """
     if platform.system() == "Darwin":
         try:
             return subprocess.check_output(
                 ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
             ).strip()
-        except Exception:                # noqa: BLE001
+        except Exception:                # noqa: BLE001, S110
             pass
     elif platform.system() == "Linux":
         try:
             for line in Path("/proc/cpuinfo").read_text().splitlines():
                 if "model name" in line:
                     return line.split(":", 1)[1].strip()
-        except Exception:                # noqa: BLE001
+        except Exception:                # noqa: BLE001, S110
             pass
     return platform.processor() or "unknown"
 
@@ -78,7 +83,6 @@ def build_variants(size: int = 640, accuracy_control: bool = False):
     if not onnx.exists():
         raise SystemExit(f"缺少 {onnx}，请先下载")
 
-    core = ov.Core()
     out: dict[str, Path] = {}
 
     hr("步骤 1/3  构建 FP32 / FP16 IR")
@@ -151,8 +155,8 @@ def build_variants(size: int = 640, accuracy_control: bool = False):
                 x, r, pad = U.preprocess(im, size)
                 p = compiled([x])[oname]
                 b, sc, l = U.decode(p, r, pad, (im.shape[1], im.shape[0]))
-                preds.append(dict(gt_boxes=s["gt_boxes"], gt_classes=s["gt_classes"],
-                                  boxes=b, scores=sc, labels=l))
+                preds.append({"gt_boxes": s["gt_boxes"], "gt_classes": s["gt_classes"],
+                              "boxes": b, "scores": sc, "labels": l})
             return U.compute_coco_map(preds)["mAP50-95"]
 
         q = nncf.quantize_with_accuracy_control(
@@ -221,7 +225,25 @@ def measure(xml: Path, device: str, iters: int, warmup: int = 10) -> dict | None
 
 
 def evaluate(xml: Path, device: str, evaluator):
-    """跑完整评测集，返回 mAP。"""
+    """跑完整评测集，返回 ``(metrics, preds)``。
+
+    ``metrics`` 是 :func:`yolo_utils.compute_coco_map` 的原始 dict（键为 ``mAP50-95`` /
+    ``mAP50`` / ``classes_evaluated`` / ``per_class``；mAP 的分母是 ``classes_evaluated``，
+    不是 80，也不是类别总数）。``preds`` 是整份评测集的逐图预测（``gt_boxes`` /
+    ``gt_classes`` / ``boxes`` / ``scores`` / ``labels``），在函数返回后依然存活 ——
+    唯一调用点 ``main()`` 写的是 ``res, _ = evaluate(...)``，直接丢弃，所以这份内存纯属开销。
+
+    两处容易被误读的地方：
+        · 预处理尺寸**硬编码**为 ``U.preprocess(im)`` 的默认值 ``IMG_SIZE=640``，
+          不跟随 :func:`build_variants` 的 ``size`` 参数 —— 若用非 640 建 IR，
+          喂进去的仍是 640 画布，模型输入与数据就对不上；
+        · 实际喂进模型的张数由 ``evaluator.images()`` 决定，``Val2017Set`` 读图失败会
+          **静默跳过** ⇒ 可能少于 ``evaluator.n()``，而 ``main()`` 打印的 GT 框数来自
+          ``n_gt()``（统计全部计划 id）。两个数对不上时先查这里，别急着怀疑 mAP。
+
+    与 :func:`measure` 不同，这里的 compile **不捕获异常**（``measure`` 捕获后返回 ``None``）
+    ⇒ 设备不支持时直接抛出，中断整个评测，而不是跳过该设备继续。
+    """
     core = ov.Core()
     compiled = core.compile_model(core.read_model(str(xml)), device)
     oname = compiled.output().get_any_name()
@@ -230,8 +252,8 @@ def evaluate(xml: Path, device: str, evaluator):
         x, r, pad = U.preprocess(im)
         p = compiled([x])[oname]
         b, s, l = U.decode(p, r, pad, (im.shape[1], im.shape[0]))
-        preds.append(dict(gt_boxes=meta["gt_boxes"], gt_classes=meta["gt_classes"],
-                          boxes=b, scores=s, labels=l))
+        preds.append({"gt_boxes": meta["gt_boxes"], "gt_classes": meta["gt_classes"],
+                      "boxes": b, "scores": s, "labels": l})
     return U.compute_coco_map(preds), preds
 
 
@@ -321,7 +343,7 @@ def main() -> None:
         lines.append(f"| {r['precision']} | {r['device']} | {r['latency_ms']:.2f} | "
                      f"{r['fps']:.2f} | {r['model_mb']:.2f} |")
     if acc:
-        lines += ["", f"| Precision | mAP50-95 | Δ vs FP32 | Weights MB |", "|---|---|---|---|"]
+        lines += ["", "| Precision | mAP50-95 | Δ vs FP32 | Weights MB |", "|---|---|---|---|"]
         sizes = {r["precision"]: r["model_mb"] for r in runs}
         for tag in variants:
             d = "—" if tag == "FP32" else f"{acc[f'delta_{tag}']:+.4f}"

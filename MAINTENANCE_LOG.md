@@ -107,3 +107,8 @@
 - **Change**: yolo_utils.py::compute_coco_map 的 docstring 补一段 iou_thrs 契约（+10 行，纯文档）：mAP50-95 是全部阈值上 AP 的算术平均，但 mAP50 取的其实是 iou_thrs[0]（源码 aps50.append(ap_per_iou[0])），只在默认 IOU_THRS 从 0.50 起步时才等于字面意义的 mAP@0.5。传自定义阈值后键名即名不副实：iou_thrs=(0.4,0.9) 时 mAP50 报的是 @0.40 的 AP，iou_thrs=(0.75,) 时报的是 @0.75 的 AP，故自定义阈值下只应用 mAP50-95 做比较。另写明 iou_thrs 传空序列不会退化成 nan：先由 np.mean([]) 抛 RuntimeWarning，再在取 ap_per_iou[0] 时抛 IndexError，调用方须保证非空。tests/test_yolo_utils.py 加 2 个测试钉住该行为（+26 行）：① 同一 0.6-IoU 检测在默认阈值下 mAP50=1.0 / mAP50-95=0.3，在 (0.4,0.9) 下 mAP50=1.0 / mAP50-95=0.5；② 换成 (0.75,) 后两者均为 0 且 classes_evaluated 仍为 1 —— 说明 mAP50=0 是「在 IoU 0.75 上没匹配」而非「在 0.5 上没匹配」。全部数值由一次性探针实测，未改任何运行时逻辑。
 - **Verification**: ok=true; pytest 32 passed（collect-only 复算 tests/test_yolo_utils.py: 32，改前 30，+2 自洽）; ruff All checks passed（仅 lint 改动文件 yolo_utils.py + tests/test_yolo_utils.py）; git diff --stat: 2 files changed, 36 insertions(+), 0 deletions
 
+## 2026-10-27 — docs(bench): pin evaluate()'s return shape and 640 preprocess
+
+- **Change**: run_benchmark.py: 给 evaluate() 补 docstring（+22 行），写明 (metrics, preds) 二元组、preds 在返回后仍存活但唯一调用点直接丢弃、预处理尺寸硬编码 640 不跟随 build_variants(size)、Val2017Set 静默跳过导致实际张数可能少于 n()、compile 失败不捕获。另给 cpu_name() 补 docstring，并清零本仓最后 7 处 ruff 违规（EXE001 chmod +x / S110 x2 加 noqa / F841 删未用的 core / C408 x2 改字面量 / F541 去掉空 f-string）
+- **Verification**: pytest 32 passed; ruff All checks passed (whole repo, 7 -> 0)
+
