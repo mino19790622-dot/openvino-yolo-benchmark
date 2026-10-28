@@ -125,9 +125,32 @@ def _needs_sigmoid(cls_scores: np.ndarray) -> bool:
 def decode(pred: np.ndarray, ratio: float, pad, orig_wh,
            conf_thr=0.001, iou_thr=0.7,
            max_det=300) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """pred 形状支持 (1,84,8400) 或 (1,8400,84)。
+    """把 YOLOv8 的原始输出解码成原图坐标下的 (boxes, scores, labels)，boxes 为 xyxy。
 
-    返回已还原到原图坐标的 (boxes, scores, labels)，其中 boxes 为 xyxy。
+    ``pred`` 支持 ``(1,84,8400)`` 与 ``(1,8400,84)`` 两种布局，靠
+    ``pred.shape[0] < pred.shape[1]`` 判断是否需要转置 —— 它只比两个维度的大小，
+    **不看哪个轴正好是 ``4 + nc``**。所以只要框数少于通道数（自定义小类别数模型、
+    或提前裁剪过候选框的导出图），就会被静默当成「长边在前」而转错方向：
+    实测一个 ``(1,20,84)`` 的输入里唯一那个 0.9 分的真框，解码后直接消失。
+    非标准形状请自己保证方向，别依赖这里的启发式。
+
+    ``pad`` 是 letterbox 返回的 ``(left, top)``，**先减 pad、再除以 ``ratio``**。
+    顺序不能反 —— 反过来 pad 会被一起缩放，非方形输入整体偏移。
+
+    **完全落在原图之外的框会被静默丢弃，而不是钉到边框上**：``clip`` 先把越界框
+    压成零面积，紧接着的退化过滤（宽或高 ``<= 1e-3``）再把它删掉。因此
+    ``len(boxes)`` 可能小于通过 ``conf_thr`` 的框数，且调用方**无法区分**
+    「框在图外」与「本来就没检出」。部分越界的框则保留并裁剪
+    （``[610, 270, 640, 370]`` 这类）。退化阈值以**原图像素**衡量、与 ``ratio``
+    无关：640 画布上几个像素宽的框缩回原图后可能小于 1e-3 而被丢。
+
+    置信度过滤是严格 ``>``，比较的是 ``cls_scores`` 经（可选）sigmoid 后的
+    ``max(1)``：分数**恰好等于** ``conf_thr`` 的框会被丢掉。随后传给
+    ``multiclass_nms()`` 的 ``conf_thr`` 在那里面不起作用（见该函数说明）。
+
+    三个返回值行数一致，空结果固定为 ``boxes (0,4)`` / ``scores (0,)`` /
+    ``labels (0,)``，调用方无需特判；但空结果的 dtype 是 ``float64`` 与 ``int64``，
+    不是输入的 ``float32``，要与模型输出拼接时请自行 ``astype``。
     """
     if pred.ndim == 3:
         pred = np.squeeze(pred, 0)

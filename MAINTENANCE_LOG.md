@@ -112,3 +112,8 @@
 - **Change**: run_benchmark.py: 给 evaluate() 补 docstring（+22 行），写明 (metrics, preds) 二元组、preds 在返回后仍存活但唯一调用点直接丢弃、预处理尺寸硬编码 640 不跟随 build_variants(size)、Val2017Set 静默跳过导致实际张数可能少于 n()、compile 失败不捕获。另给 cpu_name() 补 docstring，并清零本仓最后 7 处 ruff 违规（EXE001 chmod +x / S110 x2 加 noqa / F841 删未用的 core / C408 x2 改字面量 / F541 去掉空 f-string）
 - **Verification**: pytest 32 passed; ruff All checks passed (whole repo, 7 -> 0)
 
+## 2026-10-28 — decode(): pin the layout, clip-then-drop and strict > contracts
+
+- **Change**: 给 yolo_utils.py::decode() 补 docstring，纯文档，无行为变更。四条契约全部先用 /tmp 探针实测：① 布局判定只比 shape[0] < shape[1]，不看哪个轴是 4+nc —— (1,20,84) 的输入里唯一 0.9 分真框解码后直接消失；② pad 是 (left,top)，必须先减 pad 再除以 ratio；③ clip 在退化过滤之前 ⇒ 完全落在原图外的框被静默丢弃、不钉到边框，调用方无法区分「框在图外」与「没检出」，部分越界则裁剪保留；④ 置信度是严格 >，分数恰好等于 conf_thr 的框被丢；另记空结果 dtype 为 float64/int64 而非 float32。
+- **Verification**: pytest 32 passed; ruff All checks passed (yolo_utils.py)
+
