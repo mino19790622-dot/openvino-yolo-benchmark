@@ -104,7 +104,12 @@ class Val2017Set:
         return int(sum(len(self.boxes_by_img[i]) for i in self.ids))
 
     def _fetch(self, img_id: int) -> Path:
-        """返回图片本地路径，缺失时按需下载并落盘。"""
+        """返回图片本地路径，缺失时按需下载并落盘。
+
+        ``urlretrieve`` 不带 timeout、也没有重试：网络抖动时可能长时间挂住，
+        失败则直接抛异常。异常不在此处吞掉，会一路冒出 ``images()`` 的生成器，
+        让已经产出的那几张连同本次评测一起作废 —— 所以长跑前先把图片缓存好。
+        """
         p = VAL_IMG_DIR / f"{img_id:012d}.jpg"
         if not p.exists():
             urllib.request.urlretrieve(VAL_URL.format(img_id), p)
@@ -138,6 +143,9 @@ def make_eval_set(which: str = "coco128", **kw):
     ``make_eval_set("coco128", limit=50)`` 里的 ``limit`` 会被**静默丢弃** ——
     既不报错也不裁剪，仍然跑满 128 张。``run_benchmark.py --limit`` 同理，
     只有 ``--eval-set val2017`` 时才真正生效。
+
+    ``which`` 只做与 ``"val2017"`` 的精确比较，其余任何取值（含拼错的
+    ``"val2017 "``、``"VAL2017"``）都会**静默回落到 coco128**，不报错也不提示。
     """
     if which == "val2017":
         return Val2017Set(**kw)

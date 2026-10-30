@@ -117,3 +117,8 @@
 - **Change**: 给 yolo_utils.py::decode() 补 docstring，纯文档，无行为变更。四条契约全部先用 /tmp 探针实测：① 布局判定只比 shape[0] < shape[1]，不看哪个轴是 4+nc —— (1,20,84) 的输入里唯一 0.9 分真框解码后直接消失；② pad 是 (left,top)，必须先减 pad 再除以 ratio；③ clip 在退化过滤之前 ⇒ 完全落在原图外的框被静默丢弃、不钉到边框，调用方无法区分「框在图外」与「没检出」，部分越界则裁剪保留；④ 置信度是严格 >，分数恰好等于 conf_thr 的框被丢；另记空结果 dtype 为 float64/int64 而非 float32。
 - **Verification**: pytest 32 passed; ruff All checks passed (yolo_utils.py)
 
+## 2026-10-30 — docs(eval): silent fallback and no-timeout fetch
+
+- **Change**: Document two implicit contracts in coco_eval_set.py: (1) make_eval_set() compares 'which' exactly against "val2017" and silently falls back to Coco128Set for any other value, including typos; (2) _fetch() calls urlretrieve with no timeout and no retry, and lets the exception escape the images() generator. Docstring only, no code change.
+- **Verification**: pytest 32 passed; ruff check coco_eval_set.py: All checks passed
+
