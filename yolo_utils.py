@@ -47,7 +47,19 @@ def preprocess(im: np.ndarray, size: int = IMG_SIZE) -> tuple[np.ndarray, float,
 # NMS
 # --------------------------------------------------------------------------
 def nms(boxes: np.ndarray, scores: np.ndarray, iou_thr: float) -> np.ndarray:
-    """单类 NMS，返回保留下来的下标。"""
+    """单类 NMS，返回保留下来的下标。
+
+    三条此前只存在于代码里的契约（本次仅补文档，运行时行为未变）：
+
+    1. **返回顺序按分数降序**，且下标指向传入的原始数组。保留框按
+       ``np.argsort(scores)[::-1]`` 的顺序依次取出，所以 ``keep[0]`` 一定是
+       分数最高的那个框；调用方若还需要别的顺序得自己再排一次。
+    2. **抑制判定是闭区间**：只有 IoU **严格大于** ``iou_thr`` 的框才会被抑制，
+       IoU 恰好等于阈值的框会被保留。源码写的是 ``iou <= iou_thr`` 表示保留，
+       很容易读反。
+    3. **退化框不会除零**：IoU 的分母取 ``np.maximum(union, 1e-9)``，所以面积为 0
+       的退化框得到的是 IoU = 0.0（不是 nan），也就不会被任何阈值抑制。
+    """
     if boxes.size == 0:
         return np.empty(0, dtype=int)
     x1, y1, x2, y2 = boxes.T

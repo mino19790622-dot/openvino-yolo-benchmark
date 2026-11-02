@@ -122,3 +122,8 @@
 - **Change**: Document two implicit contracts in coco_eval_set.py: (1) make_eval_set() compares 'which' exactly against "val2017" and silently falls back to Coco128Set for any other value, including typos; (2) _fetch() calls urlretrieve with no timeout and no retry, and lets the exception escape the images() generator. Docstring only, no code change.
 - **Verification**: pytest 32 passed; ruff check coco_eval_set.py: All checks passed
 
+
+## 2026-11-02 — test(nms): pin the NMS ordering, threshold boundary and degenerate boxes
+
+- **Change**: yolo_utils.py: 给 nms() 补 docstring（+13/-1，纯文档，无行为变化），钉住三条此前只存在于代码里的契约 —— ① 返回下标按分数降序（keep[0] 一定是最高分框）且指向传入的原始数组；② 抑制判定是闭区间：源码写的是 iou <= iou_thr 表示保留，故只有 IoU 严格大于阈值才被抑制，恰好等于阈值的框会保留（很容易读反）；③ IoU 分母取 max(union, 1e-9)，面积为 0 的退化框得到 IoU 0.0 而非 nan，故不会被任何阈值抑制。另给 tests/test_yolo_utils.py 加 4 个测试（+43 行）：nms 返回顺序为分数降序；IoU 恰好等于阈值（交集 50 / 并集 100）时保留、阈值为 0.49 时抑制；零面积退化框不被抑制且不产生 nan；multiclass_nms 的 conf_thr 只是为对齐 decode() 签名而保留、本函数并不使用，故 conf_thr=0.9 时低分框仍全部返回。断言值全部由一次性探针实跑取得，未估算。未改业务逻辑、未重构、未增删依赖、未动 .github/workflows。
+- **Verification**: ok=true; pytest ....................................                                     [100%]（collect-only 复算 ，改前 32，本次 +4 自洽）; ruff All checks passed!

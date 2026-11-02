@@ -370,3 +370,46 @@ def test_map_a_detection_on_an_image_without_gt_is_a_false_positive():
     # only the image that actually carries a box counts towards npos
     assert res["per_class"][5]["npos"] == 1
     assert res["per_class"][5]["nimg_gt"] == 1
+
+
+# --------------------------------------------------- NMS ordering / threshold
+def test_nms_returns_indices_ordered_by_descending_score():
+    # keep follows argsort(scores)[::-1], so the highest scoring box comes
+    # first and the indices still point at the original array.
+    boxes = np.array([[0, 0, 10, 10], [20, 20, 30, 30], [40, 40, 50, 50]], float)
+    scores = np.array([0.1, 0.9, 0.5], float)
+    assert list(nms(boxes, scores, 0.5)) == [1, 2, 0]
+
+
+def test_nms_keeps_a_box_whose_iou_equals_the_threshold():
+    # intersection 50, union 100 -> IoU exactly 0.5.
+    # The suppression test is "iou <= iou_thr keeps", so equality is kept and
+    # only a strictly larger IoU suppresses.
+    boxes = np.array([[0, 0, 10, 10], [0, 0, 5, 10]], float)
+    scores = np.array([0.9, 0.8], float)
+    assert list(nms(boxes, scores, 0.5)) == [0, 1]
+    assert list(nms(boxes, scores, 0.49)) == [0]
+
+
+def test_nms_never_suppresses_a_degenerate_zero_area_box():
+    # The union is clamped to 1e-9, so a zero-area box scores IoU 0.0 rather
+    # than nan and survives every threshold.
+    boxes = np.array([[0, 0, 10, 10], [5, 5, 5, 5]], float)
+    scores = np.array([0.9, 0.8], float)
+    assert list(nms(boxes, scores, 0.0)) == [0, 1]
+    # two coincident zero-area boxes: union is 0, still no nan and no crash
+    degenerate = np.array([[5, 5, 5, 5], [5, 5, 5, 5]], float)
+    assert list(nms(degenerate, np.array([0.9, 0.8], float), 0.7)) == [0, 1]
+
+
+def test_multiclass_nms_ignores_the_conf_thr_argument():
+    # conf_thr only exists to mirror decode()'s signature; this function never
+    # applies it, so a high conf_thr must not drop any box.
+    boxes = np.array([[0, 0, 10, 10], [20, 20, 30, 30], [40, 40, 50, 50]], float)
+    scores = np.array([0.10, 0.20, 0.05], float)
+    labels = np.array([0, 0, 1], int)
+    out_b, out_s, out_l = multiclass_nms(boxes, scores, labels,
+                                          conf_thr=0.9, iou_thr=0.7)
+    assert len(out_b) == 3
+    assert list(out_l) == [0, 0, 1]
+    assert list(out_s) == [0.20, 0.10, 0.05]
