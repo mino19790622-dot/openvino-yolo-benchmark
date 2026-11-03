@@ -123,6 +123,18 @@ def measure_async(compiled, data, iters: int, nstreams: int, warmup: int = 10) -
 
 
 def main() -> None:
+    """对每个存在的模型跑三种模式，输出控制台表格与 ``results/async_bench.json``。
+
+    三种模式对应 runtime 组常被问到的三条对照：
+        · 同步 1-stream（LATENCY hint）—— 纯延迟基线；
+        · 异步队列深度 1（LATENCY hint）—— 与基线同 stream 数，只换提交方式；
+        · 异步多 stream（THROUGHPUT hint）—— 聚合吞吐的上界。
+
+    同一模型的三次测量复用**同一份** ``build_input`` 结果，让差异只来自 runtime 配置
+    而非输入数据（理由见 :func:`build_input`）；``_num_streams`` 作为元数据一并落库，
+    因为 THROUGHPUT hint 下的实际 stream 数由 OpenVINO 依核心数决定，不写下来就无法复盘。
+    模型文件缺失时只跳过该模型并打印提示，不中断整轮。
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--iters", type=int, default=200)
     args = ap.parse_args()
