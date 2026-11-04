@@ -183,6 +183,23 @@ def build_variants(size: int = 640, accuracy_control: bool = False):
 # 2. 性能
 # --------------------------------------------------------------------------
 def _detect_devices(core: ov.Core) -> list[str]:
+    """把 `core.available_devices` 归并成 DEVICES 白名单里的裸设备名（纯信息用途）。
+
+    这是给报告表头用的「这台机器有什么」摘要，**不参与任何设备选择**：
+    返回值只写进 env["devices_used"]，`evaluate()` 与 `measure()` 的 device 各自写死或
+    由调用方传入。因此这里判错也不会影响跑分，不要拿它当能力探测。
+
+    匹配是**大小写敏感的子串包含**（`d in f`），由此产生的三条实际行为
+    （均以 stub Core 实测，非推断）：
+      - 顺序由 `DEVICES` 决定而非 OpenVINO 的报告顺序 —— 传入 ["NPU","CPU"] 得到
+        ["CPU","NPU"]；同一物理设备的多个实例塌缩成一个名字 ——
+        ["GPU.0","GPU.1","CPU"] 得到 ["CPU","GPU"]。
+      - `replace(" (", "|")` 只是把括号串规整成竖线，**不做拆分**，所以 "AUTO (CPU,GPU)"
+        与 "HETERO:GPU,CPU" 这类复合串会同时命中 CPU 和 GPU 并双双返回，
+        尽管它们只是编译期 hint、并非独立硬件。
+      - 没命中就返回空列表，**没有 CPU 兜底** —— ["MYRIAD"] / [] / ["cpu"]（小写）
+        一律得到 []。调用方若把空列表当「无可用设备」会误判。
+    """
     found = [d.replace(" (", "|") for d in core.available_devices]
     devs = [d for d in DEVICES if any(d in f for f in found)]
     return devs

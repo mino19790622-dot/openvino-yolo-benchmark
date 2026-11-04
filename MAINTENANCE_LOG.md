@@ -132,3 +132,8 @@
 
 - **Change**: async_bench.py: 给 main() 补 docstring（+13 行，纯注释，无行为变化），把此前只写在代码里的三件事固定下来 —— ① 每个模型测的是哪三种模式（同步 1-stream/LATENCY、异步队列深度 1/LATENCY、异步多 stream/THROUGHPUT），以及它们各自回答什么问题；② 同一模型的三次测量复用同一份 build_input 结果，差异才只来自 runtime 配置而非输入数据；③ _num_streams 为什么必须落库（THROUGHPUT hint 下的实际 stream 数由 OpenVINO 依核心数决定，不记录无法复盘），并说明模型文件缺失时只跳过该模型、不中断整轮。未改业务逻辑、未重构、未增删依赖、未动 .github/workflows。
 - **Verification**: 36 passed in 0.12s; ruff All checks passed!
+
+## 2026-11-04 — docs(bench): pin _detect_devices substring matching and no-fallback
+
+- **Change**: run_benchmark.py: 给 _detect_devices() 补 docstring（纯注释，无行为变化），把三条此前只存在于代码里的契约用 stub Core 实测钉住 —— ① 匹配是大小写敏感子串包含，返回顺序由 DEVICES 决定而非 OpenVINO 报告顺序（["NPU","CPU"] -> ["CPU","NPU"]），同一物理设备的多实例塌缩成一个名字（["GPU.0","GPU.1","CPU"] -> ["CPU","GPU"]）；② replace(" (", "|") 只做规整不做拆分，故 "AUTO (CPU,GPU)" 与 "HETERO:GPU,CPU" 这类复合串会同时命中 CPU 与 GPU 并双双返回，尽管它们只是编译期 hint 而非独立硬件；③ 无命中即返回空列表、没有 CPU 兜底（["MYRIAD"] / [] / 小写 "cpu" 均为 []）。同时写明该返回值只进 env["devices_used"]，不参与设备选择（evaluate 写死 CPU），判错不影响跑分、不可当能力探测用。未改业务逻辑、未重构、未增删依赖、未动 .github/workflows。
+- **Verification**: pytest 36 passed; ruff All checks passed (run_benchmark.py)
